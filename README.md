@@ -1,7 +1,9 @@
 kube-event-watcher
 =====
 
-kubernetes内で起こったeventをslackに通知するツールです
+kubernetes内で起こったeventをslackに通知するツールです  
+やっていることは <a href="https://github.com/bitnami-labs/kubewatch">kubewatch</a> と似ていますが、あちらはpodなどのresourceをwatchしているのに対し、こちらはeventをwatchしています  
+
 
 ## 使い方
 ```
@@ -11,6 +13,15 @@ $ ./kube-event-watcher
 
 ## 設定
 
+### 環境変数
+slackのAPI Tokenと通知先のchannelを環境変数に設定します
+
+```
+SLACK_TOKEN=xoxb-hogehagehigehege
+SLACK_CHANNEL=hogeroom
+```
+
+### 設定ファイル
 yaml形式のconfigファイルで通知するイベントを設定します
 
 例）

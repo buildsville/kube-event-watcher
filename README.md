@@ -21,6 +21,17 @@ SLACK_TOKEN=xoxb-hogehagehigehege
 SLACK_CHANNEL=hogeroom
 ```
 
+必要な場合はkubeconfigのpathも環境変数で指定します
+
+```
+KUBECONFIG=/path/to/kubeconfig/file
+```
+
+必要かつ指定がない場合は`$HOME/.kube/config`を参照します
+
+kubernetesにdeployする場合は不要みたいです（apiのInClusterConfig()でよろしくやってくれるようです）
+
+
 ### 設定ファイル
 yaml形式のconfigファイルで通知するイベントを設定します
 
@@ -66,4 +77,9 @@ eventのtypeが`Normal`の場合は緑、`Warning`の場合は黄色で通知さ
 
 ## dockerコンテナ
 
+https://hub.docker.com/r/masahata/kube-event-watcher/
+
 ## kubernetesデプロイ
+
+eventをwatchするパーミッションが必要です
+`examples/kubernetes.yaml`を参考にしてください

@@ -25,6 +25,7 @@ type watchEvent struct {
 type fieldSelector struct {
 	Key   string `yaml:"key"`
 	Value string `yaml:"value"`
+	Except bool `yaml:"except"`
 }
 
 //configの指定がない場合のdefaultを設けておく

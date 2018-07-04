@@ -5,7 +5,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 	//"github.com/golang/glog"
@@ -170,21 +169,17 @@ func (c *Controller) runWorker() {
 	}
 }
 
-func makeSelectorString(conf []fieldSelector) string {
-	var e []string
-	for _, s := range conf {
-		e = append(e, s.Key+":"+s.Value)
-	}
-	return strings.Join(e, ",")
-}
-
 func makeFieldSelector(conf []fieldSelector) fields.Selector {
 	if len(conf) == 0 {
 		return fields.Everything()
 	}
 	var selectors []fields.Selector
 	for _, s := range conf {
-		selectors = append(selectors, fields.OneTermEqualSelector(s.Key, s.Value))
+		if s.Except {
+			selectors = append(selectors, fields.OneTermNotEqualSelector(s.Key, s.Value))
+		} else {
+			selectors = append(selectors, fields.OneTermEqualSelector(s.Key, s.Value))
+		}
 	}
 	return fields.AndSelectors(selectors...)
 }

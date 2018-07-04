@@ -45,8 +45,10 @@ yaml形式のconfigファイルで通知するイベントを設定します
   fieldSelectors:
     - key: key1
       value: value1
+      except: true
     - key: key2
       value: value2
+      except: false
 ```
 
 - `namespace` : 通知対象のnamespaceです、`""`で全て対象になります
@@ -54,8 +56,10 @@ yaml形式のconfigファイルで通知するイベントを設定します
   - `ADDED` : 新しいイベントです。大体はこれかと思います
   - `MODIFIED` : 既存のイベントが再度起こった時などに使われます
   - `DELETED` : イベントの保持期間が切れて削除された時などに起こります、基本的に不要かと思います
-- `fieldSelector` : 通知したいイベントの詳細を指定できます。複数指定はAND条件になります
+- `fieldSelectors` : 通知したいイベントの詳細を指定できます。__複数指定はAND条件になります__
+  - 指定がない場合は全てのeventを取得します
   - 指定できるfield keyは <a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#event-v1-core">apiリファレンス</a> を参照してください
+  - `except:true`を設定した場合、そのfieldSelectorはnot equalで設定されます
   - `examples/config.yaml`も併せて参考にしてください
 
 起動時にコマンドライン引数 `-config` でpathを指定できます
@@ -73,7 +77,7 @@ $ ./kube-event-watcher -config=/PATH/TO/CONFIG/config.yaml
 
 
 eventのtypeが`Normal`の場合は緑、`Warning`の場合は黄色で通知されます  
-この2種類しか知らないのでその他のtypeだと赤で通知するようにしています
+この2種類しか確認していないのでその他のtypeが出た場合は赤で通知するようにしています
 
 ## dockerコンテナ
 
@@ -81,5 +85,5 @@ https://hub.docker.com/r/masahata/kube-event-watcher/
 
 ## kubernetesデプロイ
 
-eventをwatchするパーミッションが必要です
+eventをwatchするパーミッションが必要です  
 `examples/kubernetes.yaml`を参考にしてください

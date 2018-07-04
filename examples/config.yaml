@@ -6,10 +6,12 @@
   fieldSelectors:
     - key: involvedObject.kind
       value: Pod
-    - key: type
-      value: Normal
+    - key: reason
+      value: Pulled
+      except: true
     - key: reason
       value: Created
+      except: true
 - namespace: "kube-system"
   watchEvent:
     ADDED: true
@@ -18,8 +20,10 @@
   fieldSelectors:
     - key: involvedObject.kind
       value: Pod
+      except: false
     - key: reason
       value: Killing
+      except: false
 - namespace: ""
   watchEvent:
     ADDED: true
@@ -28,3 +32,4 @@
   fieldSelectors:
     - key: involvedObject.kind
       value: Node
+      except: false

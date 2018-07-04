@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"errors"
 	"os"
 	"github.com/nlopes/slack"
@@ -32,6 +33,8 @@ func validateSlack() error {
 	if slackConf.Token == "" || slackConf.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}
+	fmt.Printf("%#v\n",slackConf.Token)
+	fmt.Printf("%#v\n",slackConf.Channel)
 	api := slack.New(slackConf.Token)
   title := "kube-event-watcher (beta)"
   text := "application start"

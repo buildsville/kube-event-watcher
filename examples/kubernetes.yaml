@@ -1,0 +1,73 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kube-event-watcher
+rules:
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-event-watcher
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-event-watcher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-event-watcher
+subjects:
+  - kind: ServiceAccount
+    name: kube-event-watcher
+    namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-event-watcher
+  namespace: default
+data:
+  config.yaml: |
+    - namespace: ""
+      watchEvent:
+        ADDED: true
+        MODIFIED: true
+        DELETED: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-event-watcher
+  namespace: default
+spec:
+  serviceAccountName: kube-event-watcher
+  containers:
+    - image: masahata/kube-event-watcher:latest
+      imagePullPolicy: Always
+      name: kube-event-watcher
+      args: ["-config=/tmp/config.yaml"]
+      envFrom:
+        - secretRef:
+            name: kube-event-watcher
+      volumeMounts:
+        - name: config-volume
+          mountPath: /tmp
+  volumes:
+    - name: config-volume
+      configMap:
+        name: kube-event-watcher
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-event-watcher
+  namespace: default
+type: Opaque
+data:
+  SLACK_CHANNEL: channelencodedbase64
+  SLACK_TOKEN: apitokenencodedbase64

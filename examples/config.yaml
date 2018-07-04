@@ -1,0 +1,30 @@
+- namespace: "default"
+  watchEvent:
+    ADDED: true
+    MODIFIED: true
+    DELETED: false
+  fieldSelectors:
+    - key: involvedObject.kind
+      value: Pod
+    - key: type
+      value: Normal
+    - key: reason
+      value: Created
+- namespace: "kube-system"
+  watchEvent:
+    ADDED: true
+    MODIFIED: true
+    DELETED: false
+  fieldSelectors:
+    - key: involvedObject.kind
+      value: Pod
+    - key: reason
+      value: Killing
+- namespace: ""
+  watchEvent:
+    ADDED: true
+    MODIFIED: true
+    DELETED: false
+  fieldSelectors:
+    - key: involvedObject.kind
+      value: Node

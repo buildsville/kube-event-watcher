@@ -1,0 +1,5 @@
+- namespace: ""
+  watchEvent:
+    ADDED: true
+    MODIFIED: true
+    DELETED: false

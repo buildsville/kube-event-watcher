@@ -13,9 +13,9 @@ RUN apk update && \
 FROM alpine:3.7
 
 RUN apk add --update ca-certificates && \
-    mkdir "$HOME/.kube-event-watcher"
+    mkdir "/root/.kube-event-watcher"
 
 COPY --from=builder /kube-event-watcher /bin/kube-event-watcher
-COPY --from=builder /config.yaml "$HOME/.kube-event-watcher/config.yaml"
+COPY --from=builder /config.yaml "/root/.kube-event-watcher/config.yaml"
 
 ENTRYPOINT ["/bin/kube-event-watcher"]

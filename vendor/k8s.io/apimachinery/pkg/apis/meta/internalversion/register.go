@@ -18,7 +18,7 @@ package internalversion
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	metav1alpha1 "k8s.io/apimachinery/pkg/apis/meta/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -57,7 +57,7 @@ func addToGroupVersion(scheme *runtime.Scheme, groupVersion schema.GroupVersion)
 	if err := scheme.AddIgnoredConversionType(&metav1.TypeMeta{}, &metav1.TypeMeta{}); err != nil {
 		return err
 	}
-	err := scheme.AddConversionFuncs(
+	scheme.AddConversionFuncs(
 		metav1.Convert_string_To_labels_Selector,
 		metav1.Convert_labels_Selector_To_string,
 
@@ -70,9 +70,6 @@ func addToGroupVersion(scheme *runtime.Scheme, groupVersion schema.GroupVersion)
 		Convert_internalversion_ListOptions_To_v1_ListOptions,
 		Convert_v1_ListOptions_To_internalversion_ListOptions,
 	)
-	if err != nil {
-		return err
-	}
 	// ListOptions is the only options struct which needs conversion (it exposes labels and fields
 	// as selectors for convenience). The other types have only a single representation today.
 	scheme.AddKnownTypes(SchemeGroupVersion,
@@ -82,16 +79,16 @@ func addToGroupVersion(scheme *runtime.Scheme, groupVersion schema.GroupVersion)
 		&metav1.DeleteOptions{},
 	)
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&metav1beta1.Table{},
-		&metav1beta1.TableOptions{},
-		&metav1beta1.PartialObjectMetadata{},
-		&metav1beta1.PartialObjectMetadataList{},
+		&metav1alpha1.Table{},
+		&metav1alpha1.TableOptions{},
+		&metav1alpha1.PartialObjectMetadata{},
+		&metav1alpha1.PartialObjectMetadataList{},
 	)
-	scheme.AddKnownTypes(metav1beta1.SchemeGroupVersion,
-		&metav1beta1.Table{},
-		&metav1beta1.TableOptions{},
-		&metav1beta1.PartialObjectMetadata{},
-		&metav1beta1.PartialObjectMetadataList{},
+	scheme.AddKnownTypes(metav1alpha1.SchemeGroupVersion,
+		&metav1alpha1.Table{},
+		&metav1alpha1.TableOptions{},
+		&metav1alpha1.PartialObjectMetadata{},
+		&metav1alpha1.PartialObjectMetadataList{},
 	)
 	// Allow delete options to be decoded across all version in this scheme (we may want to be more clever than this)
 	scheme.AddUnversionedTypes(SchemeGroupVersion, &metav1.DeleteOptions{})

@@ -97,6 +97,7 @@ func (c *Controller) processItem(ev Event) error {
 		objectMeta := obj.(*v1.Event).ObjectMeta
 		//起動時に取得する既存のlistは出力させない
 		if ev.send && objectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() > 0 {
+			setPromMetrics(obj)
 			err := postEventToSlack(message, "created", obj.(*v1.Event).Type)
       if err != nil {
         return err
@@ -108,6 +109,7 @@ func (c *Controller) processItem(ev Event) error {
 		//不定期に起こる謎のupdateを排除するためlastTimestampから1分未満の時だけpost
     //ここのSubを逆にすると型で怒られる（よくわからん）
 		if ev.send && assertedObj.LastTimestamp.Sub(time.Now().Local()).Seconds() > -60 {
+			setPromMetrics(obj)
 			err := postEventToSlack(message, "updated", obj.(*v1.Event).Type)
       if err != nil {
         return err

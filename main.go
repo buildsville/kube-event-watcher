@@ -15,5 +15,6 @@ func main() {
 		panic(err)
 	}
 
+	promServer()
 	watchStart()
 }

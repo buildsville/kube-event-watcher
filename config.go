@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -29,59 +28,41 @@ type fieldSelector struct {
 }
 
 //configの指定がない場合のdefaultを設けておく
-var DefaultConfigPath = func() string {
-	if home, err := homedir.Dir(); err == nil {
-		return home + "/.kube-event-watcher/config.yaml"
-	} else {
-		panic(err)
-	}
-}()
+const DefaultConfigPath = "~/.kube-event-watcher/config.yaml"
 
-var appConfig = loadConfig()
+var confPath = flag.String("config", DefaultConfigPath, "string flag")
 
 func configPath() string {
-	c := flag.String("config", DefaultConfigPath, "string flag")
-	flag.Parse()
-	if *c != "" {
-		home, err := homedir.Dir()
-		if err != nil {
-			panic(err)
-		}
-		r := regexp.MustCompile(`^~`)
-		return r.ReplaceAllString(*c, home)
-	} else {
-		return DefaultConfigPath
-	}
-}
-
-func loadConfig() []Config {
-	buf, err := ioutil.ReadFile(configPath())
+	home, err := homedir.Dir()
 	if err != nil {
 		panic(err)
 	}
+	r := regexp.MustCompile(`^~`)
+	return r.ReplaceAllString(*confPath, home)
+}
 
+func loadConfig() ([]Config, error) {
 	var c []Config
+	buf, err := ioutil.ReadFile(configPath())
+	if err != nil {
+		return c, err
+	}
+
 	//yamlに対応するfieldがなければ空の値がstructに入る
 	err = yaml.Unmarshal(buf, &c)
 	if err != nil {
-		panic(err)
+		return c, err
 	}
 
-	glog.Infof("config loaded: %+v\n", c)
-	return c
+	err = validateConfig(c)
+
+	return c, err
 }
 
-func validateConfig() error {
-	if len(appConfig) == 0 {
+func validateConfig(conf []Config) error {
+	// 指定なければデフォルト値が入ってとりあえず動くから一旦これで
+	if len(conf) == 0 {
 		return errors.New("config error: set at least one")
 	}
-	/* 指定なければallにすればよさそうだからとりあえずいらないかな
-	for _, c := range appConfig {
-	  //require `Kind`
-	  if c.Kind == "" {
-	    return errors.New("config error: kind is not specified")
-	  }
-	}
-	*/
 	return nil
 }

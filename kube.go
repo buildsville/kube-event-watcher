@@ -86,39 +86,42 @@ func (c *Controller) processNextItem() bool {
 func (c *Controller) processItem(ev Event) error {
 	obj, _, err := c.indexer.GetByKey(ev.key)
 	if err != nil {
-		glog.Infof("Fetching object with key %s from store failed with %v", ev.key, err)
+		glog.Warningf("Fetching object with key %s from store failed with %v", ev.key, err)
 		return err
 	}
 
-	message := prepareMessage(obj, ev)
+	if ev.send {
+		if ev.eventType != "DELETED" {
+			assertedObj, ok := obj.(*v1.Event)
+			if !ok {
+				glog.Warningf("object with key %s is not *v1.Event", ev.key)
+				return nil
+			}
+			message := prepareMessage(assertedObj, ev)
 
-	switch ev.eventType {
-	case "ADDED":
-		objectMeta := obj.(*v1.Event).ObjectMeta
-		//起動時に取得する既存のlistは出力させない
-		if ev.send && objectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() > 0 {
-			setPromMetrics(obj)
-			err := postEventToSlack(message, "created", obj.(*v1.Event).Type)
-			if err != nil {
-				return err
+			if ev.eventType == "ADDED" { //case "ADDED"
+				//起動時に取得する既存のlistは出力させない
+				if assertedObj.ObjectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() >= 0 {
+					setPromMetrics(assertedObj)
+					err := postEventToSlack(message, "created", assertedObj.Type)
+					if err != nil {
+						return err
+					}
+					return nil
+				}
+			} else { //case "MODIFIED"
+				//不定期に起こる謎のupdateを排除するためlastTimestampから1分未満の時だけpost
+				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
+					setPromMetrics(assertedObj)
+					err := postEventToSlack(message, "updated", assertedObj.Type)
+					if err != nil {
+						return err
+					}
+					return nil
+				}
 			}
-			return nil
-		}
-	case "MODIFIED":
-		assertedObj := obj.(*v1.Event)
-		//不定期に起こる謎のupdateを排除するためlastTimestampから1分未満の時だけpost
-		//ここのSubを逆にすると型で怒られる（よくわからん）
-		if ev.send && assertedObj.LastTimestamp.Sub(time.Now().Local()).Seconds() > -60 {
-			setPromMetrics(obj)
-			err := postEventToSlack(message, "updated", obj.(*v1.Event).Type)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-	case "DELETED":
-		if ev.send {
-			err := postEventToSlack(message, "deleted", "Danger")
+		} else { //case "DELETED"
+			err := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger")
 			if err != nil {
 				return err
 			}
@@ -186,7 +189,7 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 	return fields.AndSelectors(selectors...)
 }
 
-func watchStart() {
+func watchStart(appConfig []Config) {
 	for _, c := range appConfig {
 		client := kubeClient()
 		fieldSelector := makeFieldSelector(c.FieldSelectors)
@@ -240,22 +243,20 @@ func resourceEventHandlerFuncs(queue workqueue.RateLimitingInterface, we watchEv
 	}
 }
 
-func prepareMessage(obj interface{}, ev Event) string {
-	if ev.eventType == "DELETED" {
-		return fmt.Sprintf("Event %s has been deleted.", ev.key)
+func prepareMessage(obj *v1.Event, ev Event) string {
+	var fieldPath string
+	if obj.InvolvedObject.FieldPath == "" {
+		fieldPath = "-"
 	} else {
-		assertedObj := obj.(*v1.Event)
-		if assertedObj.InvolvedObject.FieldPath == "" {
-			assertedObj.InvolvedObject.FieldPath = "-"
-		}
-		return fmt.Sprintf("namespace: %s\nobjectKind: %s (%s)\nobjectName: %s\nreason: %s\nmessage: %s\ncount: %d",
-			assertedObj.ObjectMeta.Namespace,
-			assertedObj.InvolvedObject.Kind,
-			assertedObj.InvolvedObject.FieldPath,
-			assertedObj.InvolvedObject.Name,
-			assertedObj.Reason,
-			assertedObj.Message,
-			assertedObj.Count,
-		)
+		fieldPath = obj.InvolvedObject.FieldPath
 	}
+	return fmt.Sprintf("namespace: %s\nobjectKind: %s (%s)\nobjectName: %s\nreason: %s\nmessage: %s\ncount: %d",
+		obj.ObjectMeta.Namespace,
+		obj.InvolvedObject.Kind,
+		fieldPath,
+		obj.InvolvedObject.Name,
+		obj.Reason,
+		obj.Message,
+		obj.Count,
+	)
 }

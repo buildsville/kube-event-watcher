@@ -7,7 +7,7 @@ import (
 func main() {
 	flag.Parse()
 
-	err := validateConfig()
+	appConf, err := loadConfig()
 	if err != nil {
 		panic(err)
 	}
@@ -18,5 +18,5 @@ func main() {
 	}
 
 	promServer()
-	watchStart()
+	watchStart(appConf)
 }

@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	defaultInterval = 30
-	defaultAddr     = ":9297"
+	defaultAddr = ":9297"
 )
 
 const rootDoc = `<html>
@@ -25,7 +24,6 @@ const rootDoc = `<html>
 `
 
 var addr = flag.String("listen-address", defaultAddr, "The address to listen on for HTTP requests.")
-var interval = flag.Int("interval", defaultInterval, "Interval to scrape HPA status.")
 
 var labels = []string{
 	"ref_namespace",
@@ -63,8 +61,7 @@ func promServer() {
 	}()
 }
 
-func setPromMetrics(obj interface{}) {
-	e := obj.(*v1.Event)
+func setPromMetrics(e *v1.Event) {
 	label := prometheus.Labels{
 		"ref_namespace": e.ObjectMeta.Namespace,
 		"ref_kind":      e.InvolvedObject.Kind,

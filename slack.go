@@ -12,24 +12,21 @@ type SlackConf struct {
 	Channel string
 }
 
-var slackConf = loadSlackEnvVal()
-
 var slackColors = map[string]string{
 	"Normal":  "good",
 	"Warning": "warning",
 	"Danger":  "danger",
 }
 
-func loadSlackEnvVal() SlackConf {
+var slackConf = func() SlackConf {
 	var s SlackConf
 	s.Token = os.Getenv("SLACK_TOKEN")
 	s.Channel = os.Getenv("SLACK_CHANNEL")
 	return s
-}
+}()
 
 //実際postする以外にprivateチャンネルの存在確認する方法は…
 func validateSlack() error {
-	//s := loadSlackEnvVal()
 	if slackConf.Token == "" || slackConf.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}

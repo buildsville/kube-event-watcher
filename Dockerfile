@@ -18,4 +18,4 @@ RUN apk add --update ca-certificates && \
 COPY --from=builder /kube-event-watcher /kube-event-watcher
 COPY --from=builder /config.yaml /root/.kube-event-watcher/config.yaml
 
-ENTRYPOINT ["/kube-event-watcher"]
+ENTRYPOINT ["/kube-event-watcher","-logtostderr"]

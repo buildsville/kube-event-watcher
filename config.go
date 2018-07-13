@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
+	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -67,7 +67,7 @@ func loadConfig() []Config {
 		panic(err)
 	}
 
-	fmt.Printf("config loaded: %+v\n", c)
+	glog.Infof("config loaded: %+v\n", c)
 	return c
 }
 

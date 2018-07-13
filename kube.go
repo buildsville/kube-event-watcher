@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-	//"github.com/golang/glog"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -86,7 +86,7 @@ func (c *Controller) processNextItem() bool {
 func (c *Controller) processItem(ev Event) error {
 	obj, _, err := c.indexer.GetByKey(ev.key)
 	if err != nil {
-		fmt.Printf("Fetching object with key %s from store failed with %v", ev.key, err)
+		glog.Infof("Fetching object with key %s from store failed with %v", ev.key, err)
 		return err
 	}
 
@@ -136,20 +136,20 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	}
 
 	if c.queue.NumRequeues(key) < maxRetries {
-		fmt.Printf("Error syncing Event %v: %v", key, err)
+		glog.Errorf("Error syncing Event %v: %v", key, err)
 		c.queue.AddRateLimited(key)
 		return
 	}
 
 	c.queue.Forget(key)
 	runtime.HandleError(err)
-	fmt.Printf("Dropping Event %q out of the queue: %v", key, err)
+	glog.Infof("Dropping Event %q out of the queue: %v", key, err)
 }
 
 func (c *Controller) Run(stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
-	fmt.Println("Starting Event controller")
+	glog.Infoln("Starting Event controller")
 	serverStartTime = time.Now().Local()
 
 	go c.informer.Run(stopCh)
@@ -163,7 +163,7 @@ func (c *Controller) Run(stopCh chan struct{}) {
 	go wait.Until(c.runWorker, time.Second, stopCh)
 
 	<-stopCh
-	fmt.Println("Stopping Event controller")
+	glog.Infoln("Stopping Event controller")
 }
 
 func (c *Controller) runWorker() {

@@ -1,10 +1,12 @@
 package main
 
 import (
-//"fmt"
+	"flag"
 )
 
 func main() {
+	flag.Parse()
+
 	err := validateConfig()
 	if err != nil {
 		panic(err)

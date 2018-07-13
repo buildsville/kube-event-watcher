@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	"github.com/golang/glog"
 	"github.com/nlopes/slack"
 	"os"
 )
@@ -33,7 +33,7 @@ func validateSlack() error {
 	if slackConf.Token == "" || slackConf.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}
-	fmt.Printf("slack channel: %v\n", slackConf.Channel)
+	glog.Infof("slack channel: %v\n", slackConf.Channel)
 	api := slack.New(slackConf.Token)
 	title := "kube-event-watcher (beta)"
 	text := "application start"

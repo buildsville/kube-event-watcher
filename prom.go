@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/api/core/v1"
@@ -12,7 +12,7 @@ import (
 
 const (
 	defaultInterval = 30
-	defaultPort     = ":9297"
+	defaultAddr     = ":9297"
 )
 
 const rootDoc = `<html>
@@ -24,7 +24,7 @@ const rootDoc = `<html>
 </html>
 `
 
-var addr = flag.String("listen-address", defaultPort, "The address to listen on for HTTP requests.")
+var addr = flag.String("listen-address", defaultAddr, "The address to listen on for HTTP requests.")
 var interval = flag.Int("interval", defaultInterval, "Interval to scrape HPA status.")
 
 var labels = []string{
@@ -52,15 +52,14 @@ func init() {
 }
 
 func promServer() {
-	flag.Parse()
-	fmt.Println("start kube-event-watcher metrics exporter")
+	glog.Infoln("start kube-event-watcher metrics exporter")
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(rootDoc))
 		})
 
-		fmt.Println("error :", http.ListenAndServe(*addr, nil))
+		glog.Errorf("error : %v\n", http.ListenAndServe(*addr, nil))
 	}()
 }
 

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"regexp"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"regexp"
 )
 
 type Config struct {
@@ -23,9 +23,9 @@ type watchEvent struct {
 }
 
 type fieldSelector struct {
-	Key   string `yaml:"key"`
-	Value string `yaml:"value"`
-	Except bool `yaml:"except"`
+	Key    string `yaml:"key"`
+	Value  string `yaml:"value"`
+	Except bool   `yaml:"except"`
 }
 
 //configの指定がない場合のdefaultを設けておく

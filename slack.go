@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"errors"
-	"os"
+	"fmt"
 	"github.com/nlopes/slack"
+	"os"
 )
 
 type SlackConf struct {
@@ -33,11 +33,11 @@ func validateSlack() error {
 	if slackConf.Token == "" || slackConf.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}
-	fmt.Printf("slack channel: %v\n",slackConf.Channel)
+	fmt.Printf("slack channel: %v\n", slackConf.Channel)
 	api := slack.New(slackConf.Token)
-  title := "kube-event-watcher (beta)"
-  text := "application start"
-	params := prepareParams(title,text,"good")
+	title := "kube-event-watcher (beta)"
+	text := "application start"
+	params := prepareParams(title, text, "good")
 	_, _, err := api.PostMessage(slackConf.Channel, "", params)
 	if err != nil {
 		return err
@@ -45,32 +45,32 @@ func validateSlack() error {
 	return nil
 }
 
-func prepareParams(title string, text string,color string) slack.PostMessageParameters {
-  params := slack.PostMessageParameters{
-    AsUser: true,
-  }
-  attachment := slack.Attachment{
-    Color: color,
-    Fields: []slack.AttachmentField{
-      slack.AttachmentField{
-        Title: title,
-        Value: text,
-      },
-    },
-  }
-  params.Attachments = []slack.Attachment{attachment}
-  return params
+func prepareParams(title string, text string, color string) slack.PostMessageParameters {
+	params := slack.PostMessageParameters{
+		AsUser: true,
+	}
+	attachment := slack.Attachment{
+		Color: color,
+		Fields: []slack.AttachmentField{
+			slack.AttachmentField{
+				Title: title,
+				Value: text,
+			},
+		},
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	return params
 }
 
 func postEventToSlack(message string, action string, status string) error {
 	api := slack.New(slackConf.Token)
-  title := "kubernetes event : " + action
-  color, ok := slackColors[status]
-  if !ok {
-    color = "danger"
-  }
-  params := prepareParams(title,message,color)
-  _, _, err := api.PostMessage(slackConf.Channel, "", params)
+	title := "kubernetes event : " + action
+	color, ok := slackColors[status]
+	if !ok {
+		color = "danger"
+	}
+	params := prepareParams(title, message, color)
+	_, _, err := api.PostMessage(slackConf.Channel, "", params)
 	if err != nil {
 		return err
 	}

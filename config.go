@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -56,6 +57,7 @@ func loadConfig() ([]Config, error) {
 
 	err = validateConfig(c)
 
+	glog.Infof("config loaded: %+v\n", c)
 	return c, err
 }
 

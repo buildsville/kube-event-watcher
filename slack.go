@@ -59,7 +59,7 @@ func prepareParams(title string, text string, color string) slack.PostMessagePar
 	return params
 }
 
-func postEventToSlack(message string, action string, status string) error {
+func postEventToSlack(message string, action string, status string, channel string) error {
 	api := slack.New(slackConf.Token)
 	title := "kubernetes event : " + action
 	color, ok := slackColors[status]
@@ -67,9 +67,15 @@ func postEventToSlack(message string, action string, status string) error {
 		color = "danger"
 	}
 	params := prepareParams(title, message, color)
-	_, _, err := api.PostMessage(slackConf.Channel, "", params)
+	_, _, err := api.PostMessage(channel, "", params)
 	if err != nil {
-		return err
+		if err.Error() == "channel_not_found" {
+			glog.Infof("error : channel %v not found, send message to default channel", channel)
+			_, _, err = api.PostMessage(slackConf.Channel, "", params)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

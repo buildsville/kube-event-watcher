@@ -28,6 +28,7 @@ type Controller struct {
 	indexer  cache.Indexer
 	queue    workqueue.RateLimitingInterface
 	informer cache.Controller
+	channel  string
 }
 
 type Event struct {
@@ -62,11 +63,12 @@ func kubeClient() kubernetes.Interface {
 	return ret
 }
 
-func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller) *Controller {
+func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, channel string) *Controller {
 	return &Controller{
 		informer: informer,
 		indexer:  indexer,
 		queue:    queue,
+		channel:  channel,
 	}
 }
 
@@ -103,7 +105,7 @@ func (c *Controller) processItem(ev Event) error {
 				//起動時に取得する既存のlistは出力させない
 				if assertedObj.ObjectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() >= 0 {
 					setPromMetrics(assertedObj)
-					err := postEventToSlack(message, "created", assertedObj.Type)
+					err := postEventToSlack(message, "created", assertedObj.Type, c.channel)
 					if err != nil {
 						return err
 					}
@@ -113,7 +115,7 @@ func (c *Controller) processItem(ev Event) error {
 				//不定期に起こる謎のupdateを排除するためlastTimestampから1分未満の時だけpost
 				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
 					setPromMetrics(assertedObj)
-					err := postEventToSlack(message, "updated", assertedObj.Type)
+					err := postEventToSlack(message, "updated", assertedObj.Type, c.channel)
 					if err != nil {
 						return err
 					}
@@ -121,7 +123,7 @@ func (c *Controller) processItem(ev Event) error {
 				}
 			}
 		} else { //case "DELETED"
-			err := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger")
+			err := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.channel)
 			if err != nil {
 				return err
 			}
@@ -196,7 +198,13 @@ func watchStart(appConfig []Config) {
 		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", c.Namespace, fieldSelector)
 		queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 		indexer, informer := cache.NewIndexerInformer(eventListWatcher, &v1.Event{}, 0, resourceEventHandlerFuncs(queue, c.WatchEvent), cache.Indexers{})
-		controller := NewController(queue, indexer, informer)
+		var channel string
+		if c.Channel == "" {
+			channel = slackConf.Channel
+		} else {
+			channel = c.Channel
+		}
+		controller := NewController(queue, indexer, informer, channel)
 		stop := make(chan struct{})
 		defer close(stop)
 		go controller.Run(stop)

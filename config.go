@@ -14,6 +14,7 @@ type Config struct {
 	Namespace      string          `yaml:"namespace"`
 	WatchEvent     watchEvent      `yaml:"watchEvent"`
 	FieldSelectors []fieldSelector `yaml:"fieldSelectors"`
+	Channel        string          `yaml:"channel"`
 }
 
 type watchEvent struct {

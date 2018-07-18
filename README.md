@@ -49,6 +49,7 @@ yaml形式のconfigファイルで通知するイベントを設定します
     - key: key2
       value: value2
       except: false
+  channel: config-ch
 ```
 
 - `namespace` : 通知対象のnamespaceです、`""`で全て対象になります
@@ -61,6 +62,8 @@ yaml形式のconfigファイルで通知するイベントを設定します
   - 指定できるfield keyは <a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#event-v1-core">apiリファレンス</a> を参照してください
   - `except:true`を設定した場合、そのfieldSelectorはnot equalで設定されます
   - `examples/config.yaml`も併せて参考にしてください
+- `channel` : 環境変数に設定したslackのチャンネルと送信先を分けたい時に設定します
+  - notFoundになった場合は環境変数で設定したチャンネルに送信されます
 
 起動時にコマンドライン引数 `-config` でpathを指定できます
 
@@ -87,3 +90,8 @@ https://hub.docker.com/r/masahata/kube-event-watcher/
 
 eventをwatchするパーミッションが必要です  
 `examples/kubernetes.yaml`を参考にしてください
+
+## prometheusメトリクス
+`address=:9297` `path=/metrics` にprometheusのmetricsを出しています  
+出力されるメトリクスは `ew_event_count` のみで、各fieldの内容をlabelに持ったカウンターです  
+addressはコマンドライン引数 `-listen-address` で変更できます  

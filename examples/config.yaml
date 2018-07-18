@@ -24,6 +24,7 @@
     - key: reason
       value: Killing
       except: false
+  channel: "system-notice"
 - namespace: ""
   watchEvent:
     ADDED: true

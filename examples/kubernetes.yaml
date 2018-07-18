@@ -31,6 +31,9 @@ kind: ConfigMap
 metadata:
   name: kube-event-watcher
   namespace: default
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/port: '9297'
 data:
   config.yaml: |
     - namespace: ""
@@ -57,6 +60,8 @@ spec:
       volumeMounts:
         - name: config-volume
           mountPath: /tmp
+      ports:
+        - containerPort: 9297
   volumes:
     - name: config-volume
       configMap:

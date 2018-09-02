@@ -34,18 +34,20 @@ var (
 	globalCWLogStream = flag.String("cwLogStream", defaultCWLogStream, "Logstream name on logging")
 )
 
-var globalCWLogSetting = cwLogSetting{
-	CWLogging:   *globalCWLogging,
-	CWLogGroup:  *globalCWLogGroup,
-	CWLogStream: *globalCWLogStream,
-}
-
 var cwSession = func() *cloudwatchlogs.CloudWatchLogs {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 	return cloudwatchlogs.New(sess)
 }()
+
+func loadGlobalCWLogSetting() cwLogSetting {
+	return cwLogSetting{
+		CWLogging:   *globalCWLogging,
+		CWLogGroup:  *globalCWLogGroup,
+		CWLogStream: *globalCWLogStream,
+	}
+}
 
 func validateCWLogs() error {
 	if !*globalCWLogging {

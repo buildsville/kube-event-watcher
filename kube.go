@@ -212,7 +212,7 @@ func watchStart(appConfig []Config) {
 		} else {
 			channel = c.Channel
 		}
-		logSetting := globalCWLogSetting
+		logSetting := loadGlobalCWLogSetting()
 		if c.LogStream != "" {
 			logSetting.CWLogStream = c.LogStream
 		}

@@ -65,7 +65,7 @@ yaml形式のconfigファイルで通知するイベントを設定します
 - `channel` : 環境変数に設定したslackのチャンネルと送信先を分けたい時に設定します
   - notFoundになった場合は環境変数で設定したチャンネルに送信されます
 
-起動時にコマンドライン引数 `-config` でpathを指定できます
+起動時にflag `-config` でpathを指定できます
 
 ```
 $ ./kube-event-watcher -config=/PATH/TO/CONFIG/config.yaml
@@ -94,4 +94,20 @@ eventをwatchするパーミッションが必要です
 ## prometheusメトリクス
 `address=:9297` `path=/metrics` にprometheusのmetricsを出しています  
 出力されるメトリクスは `ew_event_count` のみで、各fieldの内容をlabelに持ったカウンターです  
-addressはコマンドライン引数 `-listen-address` で変更できます  
+addressはflag `-listen-address` で変更できます  
+
+## Clowdwatch Logs
+イベントをCloudwatch Logsに送信することもできます  
+必要なiamポリシーのactionは以下です  
+
+```
+logs:CreateLogGroup
+logs:CreateLogStream
+logs:PutLogEvents
+logs:DescribeLogStreams
+logs:DescribeLogGroups
+```
+
+flag `-cwLogging` をtrueにし（defaultはfalse）  
+`-cwLogGroup` と `-cwLogStream` でロググループとログストリームを設定します（defaultは`-h`で参照）  
+ログストリームはconfigの項目 `logStream` でconfigのグループ毎に設定可能です  

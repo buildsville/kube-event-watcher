@@ -25,6 +25,7 @@
       value: Killing
       except: false
   channel: "system-notice"
+  logStream: "custom-stream"
 - namespace: ""
   watchEvent:
     ADDED: true

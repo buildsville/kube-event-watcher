@@ -25,10 +25,11 @@ const maxRetries = 5
 var serverStartTime time.Time
 
 type Controller struct {
-	indexer  cache.Indexer
-	queue    workqueue.RateLimitingInterface
-	informer cache.Controller
-	channel  string
+	indexer    cache.Indexer
+	queue      workqueue.RateLimitingInterface
+	informer   cache.Controller
+	channel    string
+	logSetting cwLogSetting
 }
 
 type Event struct {
@@ -63,12 +64,13 @@ func kubeClient() kubernetes.Interface {
 	return ret
 }
 
-func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, channel string) *Controller {
+func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, channel string, logSetting cwLogSetting) *Controller {
 	return &Controller{
-		informer: informer,
-		indexer:  indexer,
-		queue:    queue,
-		channel:  channel,
+		informer:   informer,
+		indexer:    indexer,
+		queue:      queue,
+		channel:    channel,
+		logSetting: logSetting,
 	}
 }
 
@@ -99,15 +101,17 @@ func (c *Controller) processItem(ev Event) error {
 				glog.Warningf("object with key %s is not *v1.Event", ev.key)
 				return nil
 			}
-			message := prepareMessage(assertedObj, ev)
 
 			if ev.eventType == "ADDED" { //case "ADDED"
 				//起動時に取得する既存のlistは出力させない
 				if assertedObj.ObjectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() >= 0 {
 					setPromMetrics(assertedObj)
-					err := postEventToSlack(message, "created", assertedObj.Type, c.channel)
-					if err != nil {
-						return err
+					if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.channel); e != nil {
+						return e
+					}
+					if e := postEventToCWLogs(assertedObj, "created", c.logSetting); e != nil {
+						//cwlogsのエラーはreturnしない（retryしない）
+						glog.Errorf("Error send cloudwatch logs : \n", e)
 					}
 					return nil
 				}
@@ -115,17 +119,21 @@ func (c *Controller) processItem(ev Event) error {
 				//不定期に起こる謎のupdateを排除するためlastTimestampから1分未満の時だけpost
 				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
 					setPromMetrics(assertedObj)
-					err := postEventToSlack(message, "updated", assertedObj.Type, c.channel)
-					if err != nil {
-						return err
+					if e := postEventToSlack(assertedObj, "updated", assertedObj.Type, c.channel); e != nil {
+						return e
+					}
+					if e := postEventToCWLogs(assertedObj, "updated", c.logSetting); e != nil {
+						glog.Errorf("Error send cloudwatch logs : \n", e)
 					}
 					return nil
 				}
 			}
 		} else { //case "DELETED"
-			err := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.channel)
-			if err != nil {
-				return err
+			if e := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.channel); e != nil {
+				return e
+			}
+			if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logSetting); e != nil {
+				glog.Errorf("Error send cloudwatch logs : \n", e)
 			}
 			return nil
 		}
@@ -204,7 +212,11 @@ func watchStart(appConfig []Config) {
 		} else {
 			channel = c.Channel
 		}
-		controller := NewController(queue, indexer, informer, channel)
+		logSetting := globalCWLogSetting
+		if c.LogStream != "" {
+			logSetting.CWLogStream = c.LogStream
+		}
+		controller := NewController(queue, indexer, informer, channel, logSetting)
 		stop := make(chan struct{})
 		defer close(stop)
 		go controller.Run(stop)
@@ -249,22 +261,4 @@ func resourceEventHandlerFuncs(queue workqueue.RateLimitingInterface, we watchEv
 			}
 		},
 	}
-}
-
-func prepareMessage(obj *v1.Event, ev Event) string {
-	var fieldPath string
-	if obj.InvolvedObject.FieldPath == "" {
-		fieldPath = "-"
-	} else {
-		fieldPath = obj.InvolvedObject.FieldPath
-	}
-	return fmt.Sprintf("namespace: %s\nobjectKind: %s (%s)\nobjectName: %s\nreason: %s\nmessage: %s\ncount: %d",
-		obj.ObjectMeta.Namespace,
-		obj.InvolvedObject.Kind,
-		fieldPath,
-		obj.InvolvedObject.Name,
-		obj.Reason,
-		obj.Message,
-		obj.Count,
-	)
 }

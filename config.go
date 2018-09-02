@@ -15,6 +15,7 @@ type Config struct {
 	WatchEvent     watchEvent      `yaml:"watchEvent"`
 	FieldSelectors []fieldSelector `yaml:"fieldSelectors"`
 	Channel        string          `yaml:"channel"`
+	LogStream      string          `yaml:"logStream"`
 }
 
 type watchEvent struct {
@@ -30,9 +31,13 @@ type fieldSelector struct {
 }
 
 //configの指定がない場合のdefaultを設けておく
-const DefaultConfigPath = "~/.kube-event-watcher/config.yaml"
+const (
+	defaultConfigPath = "~/.kube-event-watcher/config.yaml"
+)
 
-var confPath = flag.String("config", DefaultConfigPath, "string flag")
+var (
+	confPath = flag.String("config", defaultConfigPath, "Config file path.")
+)
 
 func configPath() string {
 	home, err := homedir.Dir()

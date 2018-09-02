@@ -12,9 +12,12 @@ func main() {
 		panic(err)
 	}
 
-	err = validateSlack()
-	if err != nil {
-		panic(err)
+	if e := validateSlack(); e != nil {
+		panic(e)
+	}
+
+	if e := validateCWLogs(); e != nil {
+		panic(e)
 	}
 
 	promServer()

@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/nlopes/slack"
+	"k8s.io/api/core/v1"
 	"os"
 )
 
@@ -30,14 +32,13 @@ func validateSlack() error {
 	if slackConf.Token == "" || slackConf.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}
-	glog.Infof("slack channel: %v\n", slackConf.Channel)
+	glog.Infof("default slack channel: %v\n", slackConf.Channel)
 	api := slack.New(slackConf.Token)
-	title := "kube-event-watcher (beta)"
+	title := "kube-event-watcher"
 	text := "application start"
 	params := prepareParams(title, text, "good")
-	_, _, err := api.PostMessage(slackConf.Channel, "", params)
-	if err != nil {
-		return err
+	if _, _, e := api.PostMessage(slackConf.Channel, "", params); e != nil {
+		return e
 	}
 	return nil
 }
@@ -59,12 +60,40 @@ func prepareParams(title string, text string, color string) slack.PostMessagePar
 	return params
 }
 
-func postEventToSlack(message string, action string, status string, channel string) error {
+func prepareSlackMessage(event *v1.Event) string {
+	var fieldPath string
+	if event.InvolvedObject.FieldPath == "" {
+		fieldPath = "-"
+	} else {
+		fieldPath = event.InvolvedObject.FieldPath
+	}
+	return fmt.Sprintf("namespace: %s\nobjectKind: %s (%s)\nobjectName: %s\nreason: %s\nmessage: %s\ncount: %d",
+		event.ObjectMeta.Namespace,
+		event.InvolvedObject.Kind,
+		fieldPath,
+		event.InvolvedObject.Name,
+		event.Reason,
+		event.Message,
+		event.Count,
+	)
+}
+
+func postEventToSlack(obj interface{}, action string, status string, channel string) error {
 	api := slack.New(slackConf.Token)
 	title := "kubernetes event : " + action
 	color, ok := slackColors[status]
 	if !ok {
 		color = "danger"
+	}
+	var message string
+	switch e := obj.(type) {
+	case *v1.Event:
+		message = prepareSlackMessage(e)
+	case string:
+		message = e
+	default:
+		glog.Errorf("Not supported type : %T\n", obj)
+		return nil
 	}
 	params := prepareParams(title, message, color)
 	_, _, err := api.PostMessage(channel, "", params)

@@ -2,11 +2,20 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/nlopes/slack"
 	"k8s.io/api/core/v1"
 	"os"
+)
+
+const (
+	defaultNotifySlack = true
+)
+
+var (
+	notifySlack = flag.Bool("notifySlack", defaultNotifySlack, "Whether to notify events to Slack.")
 )
 
 type SlackConf struct {
@@ -79,6 +88,9 @@ func prepareSlackMessage(event *v1.Event) string {
 }
 
 func postEventToSlack(obj interface{}, action string, status string, channel string) error {
+	if !*notifySlack {
+		return nil
+	}
 	api := slack.New(slackConf.Token)
 	title := "kubernetes event : " + action
 	color, ok := slackColors[status]

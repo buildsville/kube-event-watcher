@@ -8,7 +8,7 @@ https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/event-exporte
 
 ## How to use
 ```
-$ go build
+$ go build -o kube-event-watcher src/*.go
 $ ./kube-event-watcher
 ```
 

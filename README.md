@@ -34,21 +34,21 @@ KUBECONFIG=/path/to/kubeconfig/file
 
 ```
 -config string
-  	Path to config file. (default "~/.kube-event-watcher/config.yaml")
+    Path to config file. (default "~/.kube-event-watcher/config.yaml")
 -notifySlack bool
-  	Whether to notify events to Slack. (default "true")
+    Whether to notify events to Slack. (default "true")
 -cwLogging bool
-  	Whether to logging events to Cloudwatch logs. (default "false")
+    Whether to logging events to Cloudwatch logs. (default "false")
 -cwLogGroup string
-  	Loggroup name on logging. (default "kube-event-watcher")
+    Loggroup name on logging. (default "kube-event-watcher")
 -cwLogStream string
-  	Logstream name on logging. (default "event")
+    Logstream name on logging. (default "event")
 -listen-address string
-  	The address to promtheus metrics endpoint. (default ":9297")
--kubeconfig
-  	Path to kubeconfig file. Generally use ServiceAccount in manifest, so don't need this. (default "~/.kube/config")
--logtostderr
-  	log to standard error instead of files.
+    The address to promtheus metrics endpoint. (default ":9297")
+-kubeconfig string
+    Path to kubeconfig file. Generally use ServiceAccount in manifest, so don't need this. (default "~/.kube/config")
+-logtostderr bool
+    log to standard error instead of files. (default "false")
 ```
 
 Can reference all flags with `/kube-event-watcher -h`

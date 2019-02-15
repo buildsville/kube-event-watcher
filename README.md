@@ -1,41 +1,61 @@
 kube-event-watcher
 =====
 
-kubernetes内で起こったeventをslackに通知するツールです  
-やっていることは <a href="https://github.com/bitnami-labs/kubewatch">kubewatch</a> と似ていますが、あちらはpodなどのresourceをwatchしているのに対し、こちらはeventをwatchしています  
+This tool is used to notify kubernetes events to Slack and AWS CloudwatchLogs.  
+In short, it's like Slack and CWLogs version below.  
+https://kubernetes.io/docs/tasks/debug-application-cluster/events-stackdriver/  
+https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/event-exporter/  
 
-
-## 使い方
+## How to use
 ```
-$ go build
+$ go build -o kube-event-watcher src/*.go
 $ ./kube-event-watcher
 ```
 
-## 設定
+## Settings
 
-### 環境変数
-slackのAPI Tokenと通知先のchannelを環境変数に設定します
+### Environment variable
+Slack api token and default notification channel.  
+(Notification channel can be further configured with config)  
 
 ```
-SLACK_TOKEN=xoxb-hogehagehigehege
-SLACK_CHANNEL=hogeroom
+SLACK_TOKEN=xoxb-1234567890-abcdefghijk
+SLACK_CHANNEL=k8s-events
 ```
 
-必要な場合はkubeconfigのpathも環境変数で指定します
+Path of kubeconfig (optional)  
+Generally use ServiceAccount in manifest, so don't need this.  
 
 ```
 KUBECONFIG=/path/to/kubeconfig/file
 ```
 
-必要かつ指定がない場合は`$HOME/.kube/config`を参照します
+### Flags
 
-kubernetesにdeployする場合は不要みたいです（apiのInClusterConfig()でよろしくやってくれるようです）
+```
+-config string
+    Path to config file. (default "~/.kube-event-watcher/config.yaml")
+-notifySlack bool
+    Whether to notify events to Slack. (default "true")
+-cwLogging bool
+    Whether to logging events to Cloudwatch logs. (default "false")
+-cwLogGroup string
+    Loggroup name on logging. (default "kube-event-watcher")
+-cwLogStream string
+    Logstream name on logging. (default "event")
+-listen-address string
+    The address to promtheus metrics endpoint. (default ":9297")
+-kubeconfig string
+    Path to kubeconfig file. Generally use ServiceAccount in manifest, so don't need this. (default "~/.kube/config")
+-logtostderr bool
+    log to standard error instead of files. (default "false")
+```
 
+Can reference all flags with `/kube-event-watcher -h`
 
-### 設定ファイル
-yaml形式のconfigファイルで通知するイベントを設定します
+### Config file
+Configure events to be notified in yaml format file.  
 
-例）
 ```
 - namespace: "namespace"
   watchEvent:
@@ -45,60 +65,61 @@ yaml形式のconfigファイルで通知するイベントを設定します
   fieldSelectors:
     - key: key1
       value: value1
-      except: true
+      type: exclude
     - key: key2
       value: value2
-      except: false
-  channel: config-ch
+      type: include
+  channel: overwrite-notify-channel
+  logStream: overwrite-CWLogs-stream
 ```
 
-- `namespace` : 通知対象のnamespaceです、`""`で全て対象になります
-- `watchevent` : 通知したい時はtrue、不要な時はfalseを設定します
-  - `ADDED` : 新しいイベントです。大体はこれかと思います
-  - `MODIFIED` : 既存のイベントが再度起こった時などに使われます
-  - `DELETED` : イベントの保持期間が切れて削除された時などに起こります、基本的に不要かと思います
-- `fieldSelectors` : 通知したいイベントの詳細を指定できます。__複数指定はAND条件になります__
-  - 指定がない場合は全てのeventを取得します
-  - 指定できるfield keyは <a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#event-v1-core">apiリファレンス</a> を参照してください
-  - `except:true`を設定した場合、そのfieldSelectorはnot equalで設定されます
-  - `examples/config.yaml`も併せて参考にしてください
-- `channel` : 環境変数に設定したslackのチャンネルと送信先を分けたい時に設定します
-  - notFoundになった場合は環境変数で設定したチャンネルに送信されます
+- `namespace` : the namespace to be notified. For all namespaces, specify `""`.
+- `watchevent` : Set `true` if want to notify, `false` if don't need it.
+  - `ADDED` : Newly created events.
+  - `MODIFIED` : Existing event happens again etc.
+  - `DELETED` : Delete events due to expiration etc. Generally set `false`.
+- `fieldSelectors` : Can specify details of events you want to notify. __It's AND condition.__
+  - If this section is not set, all events will be notified.
+  - Refer to the official document for fields that can be specified.
+  - If `type: include` is set, it is set `equal`, and in case of `type: exclude` it is set with `not equal`.
+    - `type: exclude` is effective when you want to exclude a part of a wide range.
+    - This section is not set or invalid value, `type: include` is set by default.
+  - Please also refer to `examples/config.yaml`.
+- `channel` : Set when you want to change the channel to be notified.
+  - Channel is not found, events will be sent to default channel.
+- `logStream` : Set when you want to change the log stream to be put.
+  - Stream is not found, events will be sent to default stream.
 
-起動時にflag `-config` でpathを指定できます
-
-```
-$ ./kube-event-watcher -config=/PATH/TO/CONFIG/config.yaml
-```
-
-指定がない場合は `~/.kube-event-watcher/config.yaml` を参照します
-
-## 通知例
-大体こんな感じです
+## Notification example
 
 <img src="https://i.imgur.com/aZ7CbfT.jpg">
 
+Green if the type of event is `Normal`, and yellow in the case of `Warning`.  
 
-eventのtypeが`Normal`の場合は緑、`Warning`の場合は黄色で通知されます  
-この2種類しか確認していないのでその他のtypeが出た場合は赤で通知するようにしています
-
-## dockerコンテナ
+## docker container
 
 https://hub.docker.com/r/masahata/kube-event-watcher/
 
-## kubernetesデプロイ
+## in kubernetes
 
-eventをwatchするパーミッションが必要です  
-`examples/kubernetes.yaml`を参考にしてください
+Required permissions below.
 
-## prometheusメトリクス
-`address=:9297` `path=/metrics` にprometheusのmetricsを出しています  
-出力されるメトリクスは `ew_event_count` のみで、各fieldの内容をlabelに持ったカウンターです  
-addressはflag `-listen-address` で変更できます  
+```
+apiGroups: [""]
+resources: ["events"]
+verbs: ["get", "watch", "list"]
+```
+
+See also `examples/deploy.yaml`.
+
+## prometheus metrics
+By default, prometheus metrics is in `address=:9297` `path=/metrics`.  
+Output metrics only `ew_event_count`, it's a counter metric with the value of each field as label.  
+Listen address can be changed with flag.  
 
 ## Clowdwatch Logs
-イベントをCloudwatch Logsに送信することもできます  
-必要なiamポリシーのactionは以下です  
+Can also send events to Cloudwatch Logs.  
+Required IAM policy is below.  
 
 ```
 logs:CreateLogGroup
@@ -108,6 +129,4 @@ logs:DescribeLogStreams
 logs:DescribeLogGroups
 ```
 
-flag `-cwLogging` をtrueにし（defaultはfalse）  
-`-cwLogGroup` と `-cwLogStream` でロググループとログストリームを設定します（defaultは`-h`で参照）  
-ログストリームはconfigの項目 `logStream` でconfigのグループ毎に設定可能です  
+For setting, see Flags and Config sections.  

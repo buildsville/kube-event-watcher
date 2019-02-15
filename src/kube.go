@@ -1,11 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 	"time"
 
@@ -20,7 +22,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-const maxRetries = 5
+const (
+	maxRetries            = 5
+	defaultKubeconfigPath = "~/.kube/config"
+)
 
 var serverStartTime time.Time
 
@@ -38,20 +43,26 @@ type Event struct {
 	send      bool
 }
 
+var (
+	Kubeconfig = flag.String("kubeconfig", defaultKubeconfigPath, "Path to kubeconfig file. Generally use ServiceAccount in manifest, so don't need this.")
+)
+
 func kubeClient() kubernetes.Interface {
 	var ret kubernetes.Interface
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		var kubeconfigPath string
-		if os.Getenv("KUBECONFIG") == "" {
-			home, err := homedir.Dir()
-			if err != nil {
-				panic(err)
-			}
-			kubeconfigPath = home + "/.kube/config"
-		} else {
-			kubeconfigPath = os.Getenv("KUBECONFIG")
+		r := regexp.MustCompile(`^~`)
+		home, err := homedir.Dir()
+		if err != nil {
+			panic(err)
 		}
+		if os.Getenv("KUBECONFIG") == "" {
+			kubeconfigPath = r.ReplaceAllString(*Kubeconfig, home)
+		} else {
+			kubeconfigPath = r.ReplaceAllString(os.Getenv("KUBECONFIG"), home)
+		}
+		glog.Infoln("use kubeconfig :",kubeconfigPath)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
 			panic(err)
@@ -116,7 +127,7 @@ func (c *Controller) processItem(ev Event) error {
 					return nil
 				}
 			} else { //case "MODIFIED"
-				//不定期に起こる謎のupdateを排除するためlastTimestampから1分未満の時だけpost
+				//不定期に起こる謎のupdate(`resourceVersion for the provided watch is too old`)を排除するためlastTimestampから1分未満の時だけpost
 				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
 					setPromMetrics(assertedObj)
 					if e := postEventToSlack(assertedObj, "updated", assertedObj.Type, c.channel); e != nil {
@@ -190,7 +201,7 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 	}
 	var selectors []fields.Selector
 	for _, s := range conf {
-		if s.Except {
+		if s.Type == "exclude" {
 			selectors = append(selectors, fields.OneTermNotEqualSelector(s.Key, s.Value))
 		} else {
 			selectors = append(selectors, fields.OneTermEqualSelector(s.Key, s.Value))
@@ -200,8 +211,8 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 }
 
 func watchStart(appConfig []Config) {
+	client := kubeClient()
 	for _, c := range appConfig {
-		client := kubeClient()
 		fieldSelector := makeFieldSelector(c.FieldSelectors)
 		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", c.Namespace, fieldSelector)
 		queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())

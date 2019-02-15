@@ -25,9 +25,9 @@ type watchEvent struct {
 }
 
 type fieldSelector struct {
-	Key    string `yaml:"key"`
-	Value  string `yaml:"value"`
-	Except bool   `yaml:"except"`
+	Key   string `yaml:"key"`
+	Value string `yaml:"value"`
+	Type  string `yaml:"type"`
 }
 
 //configの指定がない場合のdefaultを設けておく
@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	confPath = flag.String("config", defaultConfigPath, "Config file path.")
+	confPath = flag.String("config", defaultConfigPath, "Path to config file.")
 )
 
 func configPath() string {

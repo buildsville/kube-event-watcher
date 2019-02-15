@@ -50,7 +50,6 @@ func init() {
 }
 
 func promServer() {
-	glog.Infoln("start kube-event-watcher metrics exporter")
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +58,7 @@ func promServer() {
 
 		glog.Errorf("error : %v\n", http.ListenAndServe(*addr, nil))
 	}()
+	glog.Infoln("metrics listen at",*addr)
 }
 
 func setPromMetrics(e *v1.Event) {

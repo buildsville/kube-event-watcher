@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	globalCWLogging   = flag.Bool("cwLogging", defaultCWLogging, "Logging events to Cloudwatch logs.")
+	globalCWLogging   = flag.Bool("cwLogging", defaultCWLogging, "Whether to logging events to Cloudwatch logs.")
 	globalCWLogGroup  = flag.String("cwLogGroup", defaultCWLogGroup, "Loggroup name on logging")
 	globalCWLogStream = flag.String("cwLogStream", defaultCWLogStream, "Logstream name on logging")
 )

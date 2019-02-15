@@ -62,6 +62,7 @@ func kubeClient() kubernetes.Interface {
 		} else {
 			kubeconfigPath = r.ReplaceAllString(os.Getenv("KUBECONFIG"), home)
 		}
+		glog.Infoln("use kubeconfig :",kubeconfigPath)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
 			panic(err)
@@ -210,8 +211,8 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 }
 
 func watchStart(appConfig []Config) {
+	client := kubeClient()
 	for _, c := range appConfig {
-		client := kubeClient()
 		fieldSelector := makeFieldSelector(c.FieldSelectors)
 		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", c.Namespace, fieldSelector)
 		queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())

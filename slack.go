@@ -38,6 +38,10 @@ var slackConf = func() SlackConf {
 
 //実際postする以外にprivateチャンネルの存在確認する方法は…
 func validateSlack() error {
+	if !*notifySlack {
+		glog.Infof("disable notify Slack.\n")
+		return nil
+	}
 	if slackConf.Token == "" || slackConf.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}

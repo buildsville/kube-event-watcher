@@ -2,10 +2,25 @@ package main
 
 import (
 	"flag"
+	"github.com/golang/glog"
+	"os"
+)
+
+const (
+	appVersion = "latest"
+)
+
+var (
+	version = flag.Bool("version", false, "prints current version.")
 )
 
 func main() {
 	flag.Parse()
+
+	if *version {
+		glog.Infof("version: %v\n", appVersion)
+		os.Exit(0)
+	}
 
 	appConf, err := loadConfig()
 	if err != nil {

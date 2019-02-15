@@ -200,7 +200,7 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 	}
 	var selectors []fields.Selector
 	for _, s := range conf {
-		if s.Except {
+		if s.Type == "exclude" {
 			selectors = append(selectors, fields.OneTermNotEqualSelector(s.Key, s.Value))
 		} else {
 			selectors = append(selectors, fields.OneTermEqualSelector(s.Key, s.Value))

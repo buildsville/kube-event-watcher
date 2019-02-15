@@ -8,10 +8,10 @@
       value: Pod
     - key: reason
       value: Pulled
-      except: true
+      type: exclude
     - key: reason
       value: Created
-      except: true
+      type: exclude
 - namespace: "kube-system"
   watchEvent:
     ADDED: true
@@ -20,10 +20,10 @@
   fieldSelectors:
     - key: involvedObject.kind
       value: Pod
-      except: false
+      type: include
     - key: reason
       value: Killing
-      except: false
+      type: include
   channel: "system-notice"
   logStream: "custom-stream"
 - namespace: ""
@@ -34,4 +34,4 @@
   fieldSelectors:
     - key: involvedObject.kind
       value: Node
-      except: false
+      type: include

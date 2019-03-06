@@ -1,4 +1,4 @@
-package main
+package watcher
 
 import (
 	"flag"
@@ -7,7 +7,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -49,7 +49,8 @@ func init() {
 	prometheus.MustRegister(eventWatcherEventCount)
 }
 
-func promServer() {
+// PromServer :prometheusのメトリクスエンドポイントを起動
+func PromServer() {
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +59,7 @@ func promServer() {
 
 		glog.Errorf("error : %v\n", http.ListenAndServe(*addr, nil))
 	}()
-	glog.Infoln("metrics listen at",*addr)
+	glog.Infoln("metrics listen at", *addr)
 }
 
 func setPromMetrics(e *v1.Event) {

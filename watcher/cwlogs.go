@@ -1,20 +1,19 @@
-package main
+package watcher
 
 import (
 	"flag"
-	"github.com/golang/glog"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/golang/glog"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	"k8s.io/api/core/v1"
 )
-
-type JsonMap map[string]interface{}
 
 type cwLogSetting struct {
 	CWLogging   bool
@@ -49,7 +48,8 @@ func loadGlobalCWLogSetting() cwLogSetting {
 	}
 }
 
-func validateCWLogs() error {
+// ValidateCWLogs : 指定されたCWLogsのlogGroupとlogStreamが使用可能かどうか
+func ValidateCWLogs() error {
 	if !*globalCWLogging {
 		glog.Infof("disable Cloudwatch logging.\n")
 		return nil

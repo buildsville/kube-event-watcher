@@ -1,15 +1,17 @@
-package main
+package watcher
 
 import (
 	"errors"
 	"flag"
+	"io/ioutil"
+	"regexp"
+
 	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
-	"regexp"
 )
 
+// Config はファイルで読み込む設定の型
 type Config struct {
 	Namespace      string          `yaml:"namespace"`
 	WatchEvent     watchEvent      `yaml:"watchEvent"`
@@ -48,7 +50,8 @@ func configPath() string {
 	return r.ReplaceAllString(*confPath, home)
 }
 
-func loadConfig() ([]Config, error) {
+// LoadConfig :yamlファイルを読み込む
+func LoadConfig() ([]Config, error) {
 	var c []Config
 	buf, err := ioutil.ReadFile(configPath())
 	if err != nil {

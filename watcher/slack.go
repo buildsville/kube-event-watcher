@@ -1,13 +1,14 @@
-package main
+package watcher
 
 import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+
 	"github.com/golang/glog"
 	"github.com/nlopes/slack"
-	"k8s.io/api/core/v1"
-	"os"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -18,7 +19,7 @@ var (
 	notifySlack = flag.Bool("notifySlack", defaultNotifySlack, "Whether to notify events to Slack.")
 )
 
-type SlackConf struct {
+type slackConfig struct {
 	Token   string
 	Channel string
 }
@@ -29,15 +30,15 @@ var slackColors = map[string]string{
 	"Danger":  "danger",
 }
 
-var slackConf = func() SlackConf {
-	var s SlackConf
+var slackConf = func() slackConfig {
+	var s slackConfig
 	s.Token = os.Getenv("SLACK_TOKEN")
 	s.Channel = os.Getenv("SLACK_CHANNEL")
 	return s
 }()
 
-//実際postする以外にprivateチャンネルの存在確認する方法は…
-func validateSlack() error {
+// ValidateSlack : 指定されたslackのチャンネルが使用可能かどうか。実際postする以外にprivateチャンネルの存在確認する方法はないかな…
+func ValidateSlack() error {
 	if !*notifySlack {
 		glog.Infof("disable notify Slack.\n")
 		return nil

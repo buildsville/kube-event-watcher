@@ -1,17 +1,18 @@
-package main
+package watcher
 
 import (
 	"flag"
 	"fmt"
-	"github.com/golang/glog"
-	"github.com/mitchellh/go-homedir"
 	"os"
 	"os/signal"
 	"regexp"
 	"syscall"
 	"time"
 
-	"k8s.io/api/core/v1"
+	"github.com/golang/glog"
+	"github.com/mitchellh/go-homedir"
+
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -29,7 +30,7 @@ const (
 
 var serverStartTime time.Time
 
-type Controller struct {
+type controller struct {
 	indexer    cache.Indexer
 	queue      workqueue.RateLimitingInterface
 	informer   cache.Controller
@@ -37,14 +38,14 @@ type Controller struct {
 	logSetting cwLogSetting
 }
 
-type Event struct {
+type event struct {
 	key       string
 	eventType string
 	send      bool
 }
 
 var (
-	Kubeconfig = flag.String("kubeconfig", defaultKubeconfigPath, "Path to kubeconfig file. Generally use ServiceAccount in manifest, so don't need this.")
+	kubeconfig = flag.String("kubeconfig", defaultKubeconfigPath, "Path to kubeconfig file. Generally use ServiceAccount in manifest, so don't need this.")
 )
 
 func kubeClient() kubernetes.Interface {
@@ -58,11 +59,11 @@ func kubeClient() kubernetes.Interface {
 			panic(err)
 		}
 		if os.Getenv("KUBECONFIG") == "" {
-			kubeconfigPath = r.ReplaceAllString(*Kubeconfig, home)
+			kubeconfigPath = r.ReplaceAllString(*kubeconfig, home)
 		} else {
 			kubeconfigPath = r.ReplaceAllString(os.Getenv("KUBECONFIG"), home)
 		}
-		glog.Infoln("use kubeconfig :",kubeconfigPath)
+		glog.Infoln("use kubeconfig :", kubeconfigPath)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
 			panic(err)
@@ -75,8 +76,8 @@ func kubeClient() kubernetes.Interface {
 	return ret
 }
 
-func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, channel string, logSetting cwLogSetting) *Controller {
-	return &Controller{
+func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, channel string, logSetting cwLogSetting) *controller {
+	return &controller{
 		informer:   informer,
 		indexer:    indexer,
 		queue:      queue,
@@ -85,20 +86,20 @@ func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer,
 	}
 }
 
-func (c *Controller) processNextItem() bool {
+func (c *controller) processNextItem() bool {
 	// Wait until there is a new item in the working queue
 	ev, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(ev)
-	err := c.processItem(ev.(Event))
+	err := c.processItem(ev.(event))
 	// Handle the error if something went wrong during the execution of the business logic
 	c.handleErr(err, ev)
 	return true
 }
 
-func (c *Controller) processItem(ev Event) error {
+func (c *controller) processItem(ev event) error {
 	obj, _, err := c.indexer.GetByKey(ev.key)
 	if err != nil {
 		glog.Warningf("Fetching object with key %s from store failed with %v", ev.key, err)
@@ -153,7 +154,7 @@ func (c *Controller) processItem(ev Event) error {
 }
 
 // handleErr checks if an error happened and makes sure we will retry later.
-func (c *Controller) handleErr(err error, key interface{}) {
+func (c *controller) handleErr(err error, key interface{}) {
 	if err == nil {
 		c.queue.Forget(key)
 		return
@@ -170,7 +171,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	glog.Infof("Dropping Event %q out of the queue: %v", key, err)
 }
 
-func (c *Controller) Run(stopCh chan struct{}) {
+func (c *controller) run(stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 	glog.Infoln("Starting Event controller")
@@ -190,7 +191,7 @@ func (c *Controller) Run(stopCh chan struct{}) {
 	glog.Infoln("Stopping Event controller")
 }
 
-func (c *Controller) runWorker() {
+func (c *controller) runWorker() {
 	for c.processNextItem() {
 	}
 }
@@ -210,7 +211,8 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 	return fields.AndSelectors(selectors...)
 }
 
-func watchStart(appConfig []Config) {
+// WatchStart : eventをwatchするためのmain function
+func WatchStart(appConfig []Config) {
 	client := kubeClient()
 	for _, c := range appConfig {
 		fieldSelector := makeFieldSelector(c.FieldSelectors)
@@ -227,10 +229,10 @@ func watchStart(appConfig []Config) {
 		if c.LogStream != "" {
 			logSetting.CWLogStream = c.LogStream
 		}
-		controller := NewController(queue, indexer, informer, channel, logSetting)
+		controller := newController(queue, indexer, informer, channel, logSetting)
 		stop := make(chan struct{})
 		defer close(stop)
-		go controller.Run(stop)
+		go controller.run(stop)
 	}
 
 	sigterm := make(chan os.Signal, 1)
@@ -240,7 +242,7 @@ func watchStart(appConfig []Config) {
 }
 
 func resourceEventHandlerFuncs(queue workqueue.RateLimitingInterface, we watchEvent) cache.ResourceEventHandlerFuncs {
-	var ev Event
+	var ev event
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)

@@ -8,8 +8,8 @@ https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/event-exporte
 
 ## How to use
 ```
-$ go build
-$ ./kube-event-watcher
+$ make build
+$ ./bin/kube-event-watcher
 ```
 
 ## Settings
@@ -51,7 +51,7 @@ KUBECONFIG=/path/to/kubeconfig/file
     log to standard error instead of files. (default "false")
 ```
 
-Can reference all flags with `./kube-event-watcher -h`
+Can reference all flags with `./bin/kube-event-watcher -h`
 
 ### Config file
 Configure events to be notified in yaml format file.  

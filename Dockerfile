@@ -9,7 +9,8 @@ RUN apk update && \
     mv /tmp/kube-event-watcher/examples/default.yaml /config.yaml && \
     mv /tmp/kube-event-watcher "$GOPATH/src/github.com/buildsville/" && \
     cd "$GOPATH/src/github.com/buildsville/kube-event-watcher" && \
-    GOOS=linux GOARCH=amd64 go build -o /kube-event-watcher src/*.go
+    make build-linux && \
+    mv bin/kube-event-watcher /kube-event-watcher
 
 FROM alpine:3.7
 

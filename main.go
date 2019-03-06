@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/buildsville/kube-event-watcher/watcher"
-	"github.com/golang/glog"
 )
 
 var (
@@ -17,7 +17,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		glog.Infof("version: %v\n", appVersion)
+		fmt.Printf("kube-event-watcher version: %v\n", appVersion)
 		os.Exit(0)
 	}
 

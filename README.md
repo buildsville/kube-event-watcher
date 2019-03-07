@@ -56,6 +56,7 @@ Can reference all flags with `./bin/kube-event-watcher -h`
 ### Config file
 Configure events to be notified in yaml format file.  
 
+#### Example
 ```
 - namespace: "namespace"
   watchEvent:
@@ -73,6 +74,8 @@ Configure events to be notified in yaml format file.
   logStream: overwrite-CWLogs-stream
 ```
 
+#### Description
+
 - `namespace` : the namespace to be notified. For all namespaces, specify `""`.
 - `watchevent` : Set `true` if want to notify, `false` if don't need it.
   - `ADDED` : Newly created events.
@@ -89,6 +92,22 @@ Configure events to be notified in yaml format file.
   - Channel is not found, events will be sent to default channel.
 - `logStream` : Set when you want to change the log stream to be put.
   - Stream is not found, events will be sent to default stream.
+
+#### Field labels supported by `fieldSelectors`
+```
+involvedObject.kind
+involvedObject.namespace
+involvedObject.name
+involvedObject.uid
+involvedObject.apiVersion
+involvedObject.resourceVersion
+involvedObject.fieldPath
+reason
+source
+type
+metadata.namespace
+metadata.name
+```
 
 ## Notification example
 

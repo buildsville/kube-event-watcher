@@ -4,7 +4,9 @@ import (
 	"errors"
 	"flag"
 	"io/ioutil"
+	"os"
 	"regexp"
+	"text/template"
 
 	"github.com/golang/glog"
 	"github.com/mitchellh/go-homedir"
@@ -76,4 +78,28 @@ func validateConfig(conf []Config) error {
 		return errors.New("config error: set at least one")
 	}
 	return nil
+}
+
+// dt = defaultTemplate, tp = templatePath, td = testData
+func loadTemplate(dt string, fp string, tf map[string]interface{}, td interface{}) *template.Template {
+	var e error
+	var lt *template.Template
+	var o os.FileInfo
+	if fp != "" {
+		glog.Infof("load template file %v", fp)
+		o, e = os.Stat(fp)
+		if e == nil {
+			lt, e = template.New(o.Name()).Funcs(tf).ParseFiles(fp)
+			if e == nil {
+				e = lt.Execute(ioutil.Discard, td)
+				if e == nil {
+					return lt
+				}
+			}
+		}
+	}
+	if e != nil {
+		glog.Errorf("load default template since load error : %v", e)
+	}
+	return template.Must(template.New("").Funcs(tf).Parse(dt))
 }

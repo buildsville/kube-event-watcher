@@ -31,11 +31,11 @@ const (
 var serverStartTime time.Time
 
 type controller struct {
-	indexer    cache.Indexer
-	queue      workqueue.RateLimitingInterface
-	informer   cache.Controller
-	channel    string
-	logSetting cwLogSetting
+	indexer   cache.Indexer
+	queue     workqueue.RateLimitingInterface
+	informer  cache.Controller
+	slackConf slackConfig
+	logConf   cwLogConfig
 }
 
 type event struct {
@@ -76,13 +76,13 @@ func kubeClient() kubernetes.Interface {
 	return ret
 }
 
-func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, channel string, logSetting cwLogSetting) *controller {
+func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, slackConfig slackConfig, logConfig cwLogConfig) *controller {
 	return &controller{
-		informer:   informer,
-		indexer:    indexer,
-		queue:      queue,
-		channel:    channel,
-		logSetting: logSetting,
+		informer:  informer,
+		indexer:   indexer,
+		queue:     queue,
+		slackConf: slackConfig,
+		logConf:   logConfig,
 	}
 }
 
@@ -118,10 +118,10 @@ func (c *controller) processItem(ev event) error {
 				//起動時に取得する既存のlistは出力させない
 				if assertedObj.ObjectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() >= 0 {
 					setPromMetrics(assertedObj)
-					if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.channel); e != nil {
+					if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.slackConf); e != nil {
 						return e
 					}
-					if e := postEventToCWLogs(assertedObj, "created", c.logSetting); e != nil {
+					if e := postEventToCWLogs(assertedObj, "created", c.logConf); e != nil {
 						//cwlogsのエラーはreturnしない（retryしない）
 						glog.Errorf("Error send cloudwatch logs : \n", e)
 					}
@@ -131,20 +131,20 @@ func (c *controller) processItem(ev event) error {
 				//不定期に起こる謎のupdate(`resourceVersion for the provided watch is too old`)を排除するためlastTimestampから1分未満の時だけpost
 				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
 					setPromMetrics(assertedObj)
-					if e := postEventToSlack(assertedObj, "updated", assertedObj.Type, c.channel); e != nil {
+					if e := postEventToSlack(assertedObj, "updated", assertedObj.Type, c.slackConf); e != nil {
 						return e
 					}
-					if e := postEventToCWLogs(assertedObj, "updated", c.logSetting); e != nil {
+					if e := postEventToCWLogs(assertedObj, "updated", c.logConf); e != nil {
 						glog.Errorf("Error send cloudwatch logs : \n", e)
 					}
 					return nil
 				}
 			}
 		} else { //case "DELETED"
-			if e := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.channel); e != nil {
+			if e := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.slackConf); e != nil {
 				return e
 			}
-			if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logSetting); e != nil {
+			if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logConf); e != nil {
 				glog.Errorf("Error send cloudwatch logs : \n", e)
 			}
 			return nil
@@ -219,17 +219,15 @@ func WatchStart(appConfig []Config) {
 		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", c.Namespace, fieldSelector)
 		queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 		indexer, informer := cache.NewIndexerInformer(eventListWatcher, &v1.Event{}, 0, resourceEventHandlerFuncs(queue, c.WatchEvent), cache.Indexers{})
-		var channel string
-		if c.Channel == "" {
-			channel = slackConf.Channel
-		} else {
-			channel = c.Channel
+		sc := loadSlackConfig()
+		if c.Channel != "" {
+			sc.Channel = c.Channel
 		}
-		logSetting := loadGlobalCWLogSetting()
+		lc := loadCWLogConfig()
 		if c.LogStream != "" {
-			logSetting.CWLogStream = c.LogStream
+			lc.CWLogStream = c.LogStream
 		}
-		controller := newController(queue, indexer, informer, channel, logSetting)
+		controller := newController(queue, indexer, informer, sc, lc)
 		stop := make(chan struct{})
 		defer close(stop)
 		go controller.run(stop)

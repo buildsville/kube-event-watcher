@@ -1,9 +1,10 @@
 package watcher
 
 import (
+	"bytes"
 	"flag"
 	"regexp"
-	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/golang/glog"
@@ -15,10 +16,16 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 )
 
-type cwLogSetting struct {
+type cwLogConfig struct {
 	CWLogging   bool
 	CWLogGroup  string
 	CWLogStream string
+	Template    *template.Template
+}
+
+type evPlusAct struct {
+	v1.Event
+	Action string
 }
 
 const (
@@ -28,10 +35,21 @@ const (
 )
 
 var (
-	globalCWLogging   = flag.Bool("cwLogging", defaultCWLogging, "Whether to logging events to Cloudwatch logs.")
-	globalCWLogGroup  = flag.String("cwLogGroup", defaultCWLogGroup, "Loggroup name on logging")
-	globalCWLogStream = flag.String("cwLogStream", defaultCWLogStream, "Logstream name on logging")
+	globalCWLogging    = flag.Bool("cwLogging", defaultCWLogging, "Whether to logging events to Cloudwatch logs.")
+	globalCWLogGroup   = flag.String("cwLogGroup", defaultCWLogGroup, "Loggroup name on logging")
+	globalCWLogStream  = flag.String("cwLogStream", defaultCWLogStream, "Logstream name on logging")
+	cwlogsTemplateFile = flag.String("cwlogsTemplateFile", "", "Path of Clowdwatch logs template file.")
 )
+
+var cwlogDefTpl = `{
+    "status":"{{.Type}}",
+    "namespace":"{{.ObjectMeta.Namespace}}",
+    "objectKind":"{{.InvolvedObject.Kind}}({{if .InvolvedObject.FieldPath}}{{.InvolvedObject.FieldPath}}{{else}}-{{end}})",
+    "objectName":"{{.InvolvedObject.Name}}",
+    "reason":"{{.Reason}}",
+    "message":"{{escapeQuotation .Message}}",
+    "count":{{.Count}}
+}`
 
 var cwSession = func() *cloudwatchlogs.CloudWatchLogs {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
@@ -40,11 +58,22 @@ var cwSession = func() *cloudwatchlogs.CloudWatchLogs {
 	return cloudwatchlogs.New(sess)
 }()
 
-func loadGlobalCWLogSetting() cwLogSetting {
-	return cwLogSetting{
+var tplFuncs = map[string]interface{}{
+	"escapeQuotation": func(str string) string {
+		return regexp.MustCompile(`"`).ReplaceAllString(str, `\"`)
+	},
+}
+
+func loadCWLogConfig() cwLogConfig {
+	te := evPlusAct{
+		Event:  v1.Event{},
+		Action: "",
+	}
+	return cwLogConfig{
 		CWLogging:   *globalCWLogging,
 		CWLogGroup:  *globalCWLogGroup,
 		CWLogStream: *globalCWLogStream,
+		Template:    loadTemplate(cwlogDefTpl, *cwlogsTemplateFile, tplFuncs, te),
 	}
 }
 
@@ -160,30 +189,24 @@ func tokenAndPutWithRetry(event []*cloudwatchlogs.InputLogEvent, group string, s
 	return err
 }
 
-func prepareCWMessage(event *v1.Event, action string) (string, int64) {
-	var fieldPath string
-	if event.InvolvedObject.FieldPath == "" {
-		fieldPath = "-"
-	} else {
-		fieldPath = event.InvolvedObject.FieldPath
+func prepareCWMessage(event v1.Event, action string, tpl *template.Template) (string, int64) {
+	pa := evPlusAct{
+		Event:  event,
+		Action: action,
 	}
-	ret := `{"action":"` + action + `",
-    "status":"` + event.Type + `",
-    "namespace":"` + event.ObjectMeta.Namespace + `",
-    "objectKind":"` + event.InvolvedObject.Kind + `(` + fieldPath + `)",
-    "objectName":"` + event.InvolvedObject.Name + `",
-    "reason":"` + event.Reason + `",
-    "message":"` + escapeQuotation(event.Message) + `",
-    "count":` + strconv.Itoa(int(event.Count)) + `
-    }`
-	return regexp.MustCompile("[\n\t]").ReplaceAllString(ret, ""), event.LastTimestamp.Unix()
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, pa); err != nil {
+		glog.Errorf("template parse error : ", err)
+		return "", time.Now().Unix()
+	}
+	return buf.String(), event.LastTimestamp.Unix()
 }
 
 func escapeQuotation(str string) string {
 	return regexp.MustCompile(`"`).ReplaceAllString(str, `\"`)
 }
 
-func postEventToCWLogs(obj interface{}, action string, conf cwLogSetting) error {
+func postEventToCWLogs(obj interface{}, action string, conf cwLogConfig) error {
 	if !*globalCWLogging {
 		return nil
 	}
@@ -191,7 +214,7 @@ func postEventToCWLogs(obj interface{}, action string, conf cwLogSetting) error 
 	e := &cloudwatchlogs.InputLogEvent{}
 	switch aObj := obj.(type) {
 	case *v1.Event:
-		msg, ts := prepareCWMessage(aObj, action)
+		msg, ts := prepareCWMessage(*aObj, action, conf.Template)
 		e.Message = aws.String(msg)
 		e.Timestamp = aws.Int64(ts * 1000)
 	case string:

@@ -80,7 +80,6 @@ func validateConfig(conf []Config) error {
 	return nil
 }
 
-// dt = defaultTemplate, tp = templatePath, td = testData
 func loadTemplate(dt string, fp string, tf map[string]interface{}, td interface{}) *template.Template {
 	var e error
 	var lt *template.Template

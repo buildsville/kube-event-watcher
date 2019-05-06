@@ -202,10 +202,6 @@ func prepareCWMessage(event v1.Event, action string, tpl *template.Template) (st
 	return buf.String(), event.LastTimestamp.Unix()
 }
 
-func escapeQuotation(str string) string {
-	return regexp.MustCompile(`"`).ReplaceAllString(str, `\"`)
-}
-
 func postEventToCWLogs(obj interface{}, action string, conf cwLogConfig) error {
 	if !*globalCWLogging {
 		return nil

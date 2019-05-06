@@ -1,0 +1,9 @@
+namespace: {{.ObjectMeta.Namespace}}
+objectKind: {{.InvolvedObject.Kind}}
+{{if .InvolvedObject.FieldPath -}}
+fieldPath: {{.InvolvedObject.FieldPath}}
+{{end -}}
+objectName: {{.InvolvedObject.Name}}
+reason: {{.Reason}}
+message: {{.Message}}
+count: {{.Count}}

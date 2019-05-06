@@ -1,0 +1,12 @@
+{
+    "status":"{{.Type}}",
+    "namespace":"{{.ObjectMeta.Namespace}}",
+    "objectKind":"{{.InvolvedObject.Kind}}",
+    {{if .InvolvedObject.FieldPath -}}
+    "FieldPath":"{{.InvolvedObject.FieldPath}}",
+    {{end -}}
+    "objectName":"{{.InvolvedObject.Name}}",
+    "reason":"{{.Reason}}",
+    "message":"{{escapeQuotation .Message}}",
+    "count":{{.Count}}
+}

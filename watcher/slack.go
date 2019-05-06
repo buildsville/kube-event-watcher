@@ -1,10 +1,11 @@
 package watcher
 
 import (
+	"bytes"
 	"errors"
 	"flag"
-	"fmt"
 	"os"
+	"text/template"
 
 	"github.com/golang/glog"
 	"github.com/nlopes/slack"
@@ -16,12 +17,14 @@ const (
 )
 
 var (
-	notifySlack = flag.Bool("notifySlack", defaultNotifySlack, "Whether to notify events to Slack.")
+	notifySlack       = flag.Bool("notifySlack", defaultNotifySlack, "Whether to notify events to Slack.")
+	slackTemplateFile = flag.String("slackTemplateFile", "", "Path of Slack template file.")
 )
 
 type slackConfig struct {
-	Token   string
-	Channel string
+	Token    string
+	Channel  string
+	Template *template.Template
 }
 
 var slackColors = map[string]string{
@@ -30,12 +33,24 @@ var slackColors = map[string]string{
 	"Danger":  "danger",
 }
 
-var slackConf = func() slackConfig {
-	var s slackConfig
-	s.Token = os.Getenv("SLACK_TOKEN")
-	s.Channel = os.Getenv("SLACK_CHANNEL")
-	return s
-}()
+var slackConfBase = slackConfig{
+	Token:   os.Getenv("SLACK_TOKEN"),
+	Channel: os.Getenv("SLACK_CHANNEL"),
+}
+
+var slackDefTpl = `namespace: {{.ObjectMeta.Namespace}}
+objectKind: {{.InvolvedObject.Kind}} ({{if .InvolvedObject.FieldPath}}{{.InvolvedObject.FieldPath}}{{else}}-{{end}})
+objectName: {{.InvolvedObject.Name}}
+reason: {{.Reason}}
+message: {{.Message}}
+count: {{.Count}}`
+
+func loadSlackConfig() slackConfig {
+	c := slackConfBase
+	funcs := map[string]interface{}{}
+	c.Template = loadTemplate(slackDefTpl, *slackTemplateFile, funcs, v1.Event{})
+	return c
+}
 
 // ValidateSlack : 指定されたslackのチャンネルが使用可能かどうか。実際postする以外にprivateチャンネルの存在確認する方法はないかな…
 func ValidateSlack() error {
@@ -43,15 +58,15 @@ func ValidateSlack() error {
 		glog.Infof("disable notify Slack.\n")
 		return nil
 	}
-	if slackConf.Token == "" || slackConf.Channel == "" {
+	if slackConfBase.Token == "" || slackConfBase.Channel == "" {
 		return errors.New("slack error: token or channel is empty")
 	}
-	glog.Infof("default slack channel: %v\n", slackConf.Channel)
-	api := slack.New(slackConf.Token)
+	glog.Infof("default slack channel: %v\n", slackConfBase.Channel)
+	api := slack.New(slackConfBase.Token)
 	title := "kube-event-watcher"
 	text := "application start"
 	params := prepareParams(title, text, "good")
-	if _, _, e := api.PostMessage(slackConf.Channel, "", params); e != nil {
+	if _, _, e := api.PostMessage(slackConfBase.Channel, "", params); e != nil {
 		return e
 	}
 	return nil
@@ -74,29 +89,20 @@ func prepareParams(title string, text string, color string) slack.PostMessagePar
 	return params
 }
 
-func prepareSlackMessage(event *v1.Event) string {
-	var fieldPath string
-	if event.InvolvedObject.FieldPath == "" {
-		fieldPath = "-"
-	} else {
-		fieldPath = event.InvolvedObject.FieldPath
+func prepareSlackMessage(event v1.Event, tpl *template.Template) string {
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, event); err != nil {
+		glog.Errorf("template parse error : ", err)
+		return ""
 	}
-	return fmt.Sprintf("namespace: %s\nobjectKind: %s (%s)\nobjectName: %s\nreason: %s\nmessage: %s\ncount: %d",
-		event.ObjectMeta.Namespace,
-		event.InvolvedObject.Kind,
-		fieldPath,
-		event.InvolvedObject.Name,
-		event.Reason,
-		event.Message,
-		event.Count,
-	)
+	return buf.String()
 }
 
-func postEventToSlack(obj interface{}, action string, status string, channel string) error {
+func postEventToSlack(obj interface{}, action string, status string, conf slackConfig) error {
 	if !*notifySlack {
 		return nil
 	}
-	api := slack.New(slackConf.Token)
+	api := slack.New(conf.Token)
 	title := "kubernetes event : " + action
 	color, ok := slackColors[status]
 	if !ok {
@@ -105,7 +111,7 @@ func postEventToSlack(obj interface{}, action string, status string, channel str
 	var message string
 	switch e := obj.(type) {
 	case *v1.Event:
-		message = prepareSlackMessage(e)
+		message = prepareSlackMessage(*e, conf.Template)
 	case string:
 		message = e
 	default:
@@ -113,11 +119,11 @@ func postEventToSlack(obj interface{}, action string, status string, channel str
 		return nil
 	}
 	params := prepareParams(title, message, color)
-	_, _, err := api.PostMessage(channel, "", params)
+	_, _, err := api.PostMessage(conf.Channel, "", params)
 	if err != nil {
 		if err.Error() == "channel_not_found" {
-			glog.Infof("error : channel %v not found, send message to default channel", channel)
-			_, _, err = api.PostMessage(slackConf.Channel, "", params)
+			glog.Infof("error : channel %v not found, send message to default channel", conf.Channel)
+			_, _, err = api.PostMessage(conf.Channel, "", params)
 		}
 		if err != nil {
 			return err

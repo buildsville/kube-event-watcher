@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,14 +30,14 @@ const (
 	defaultKubeconfigPath = "~/.kube/config"
 )
 
-var serverStartTime time.Time
-
 type controller struct {
-	indexer   cache.Indexer
-	queue     workqueue.RateLimitingInterface
-	informer  cache.Controller
-	slackConf slackConfig
-	logConf   cwLogConfig
+	indexer     cache.Indexer
+	queue       workqueue.RateLimitingInterface
+	informer    cache.Controller
+	slackConf   slackConfig
+	logConf     cwLogConfig
+	extraFilter extraFilter
+	startTime   time.Time
 }
 
 type event struct {
@@ -76,13 +78,15 @@ func kubeClient() kubernetes.Interface {
 	return ret
 }
 
-func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, slackConfig slackConfig, logConfig cwLogConfig) *controller {
+func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, slackConfig slackConfig, logConfig cwLogConfig, extraFilter extraFilter, startTime time.Time) *controller {
 	return &controller{
-		informer:  informer,
-		indexer:   indexer,
-		queue:     queue,
-		slackConf: slackConfig,
-		logConf:   logConfig,
+		informer:    informer,
+		indexer:     indexer,
+		queue:       queue,
+		slackConf:   slackConfig,
+		logConf:     logConfig,
+		extraFilter: extraFilter,
+		startTime:   startTime,
 	}
 }
 
@@ -114,19 +118,26 @@ func (c *controller) processItem(ev event) error {
 				return nil
 			}
 
+			//起動時に取得する既存のlistはskip
+			if assertedObj.ObjectMeta.CreationTimestamp.Sub(c.startTime).Seconds() < 0 {
+				return nil
+			}
+
+			if exFiltering(assertedObj, c.extraFilter) {
+				glog.Infof("Filtered by extra filters, %s", ev.key)
+				return nil
+			}
+
 			if ev.eventType == "ADDED" { //case "ADDED"
-				//起動時に取得する既存のlistは出力させない
-				if assertedObj.ObjectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() >= 0 {
-					setPromMetrics(assertedObj)
-					if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.slackConf); e != nil {
-						return e
-					}
-					if e := postEventToCWLogs(assertedObj, "created", c.logConf); e != nil {
-						//cwlogsのエラーはreturnしない（retryしない）
-						glog.Errorf("Error send cloudwatch logs : \n", e)
-					}
-					return nil
+				setPromMetrics(assertedObj)
+				if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.slackConf); e != nil {
+					return e
 				}
+				if e := postEventToCWLogs(assertedObj, "created", c.logConf); e != nil {
+					//cwlogsのエラーはreturnしない（retryしない）
+					glog.Errorf("Error send cloudwatch logs : \n", e)
+				}
+				return nil
 			} else { //case "MODIFIED"
 				//不定期に起こる謎のupdate(`resourceVersion for the provided watch is too old`)を排除するためlastTimestampから1分未満の時だけpost
 				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
@@ -175,7 +186,6 @@ func (c *controller) run(stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 	glog.Infoln("Starting Event controller")
-	serverStartTime = time.Now().Local()
 
 	go c.informer.Run(stopCh)
 
@@ -214,20 +224,23 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 // WatchStart : eventをwatchするためのmain function
 func WatchStart(appConfig []Config) {
 	client := kubeClient()
-	for _, c := range appConfig {
-		fieldSelector := makeFieldSelector(c.FieldSelectors)
-		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", c.Namespace, fieldSelector)
+	for _, cf := range appConfig {
+		fieldSelector := makeFieldSelector(cf.FieldSelectors)
+		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", cf.Namespace, fieldSelector)
 		queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-		indexer, informer := cache.NewIndexerInformer(eventListWatcher, &v1.Event{}, 0, resourceEventHandlerFuncs(queue, c.WatchEvent), cache.Indexers{})
+		indexer, informer := cache.NewIndexerInformer(eventListWatcher, &v1.Event{}, 0, resourceEventHandlerFuncs(queue, cf.WatchEvent), cache.Indexers{})
 		sc := loadSlackConfig()
-		if c.Channel != "" {
-			sc.Channel = c.Channel
+		if cf.Channel != "" {
+			sc.Channel = cf.Channel
 		}
 		lc := loadCWLogConfig()
-		if c.LogStream != "" {
-			lc.CWLogStream = c.LogStream
+		if cf.LogStream != "" {
+			lc.CWLogStream = cf.LogStream
 		}
-		controller := newController(queue, indexer, informer, sc, lc)
+		st := time.Now().Local()
+		ef := cf.ExtraFilter
+
+		controller := newController(queue, indexer, informer, sc, lc, ef, st)
 		stop := make(chan struct{})
 		defer close(stop)
 		go controller.run(stop)
@@ -271,5 +284,36 @@ func resourceEventHandlerFuncs(queue workqueue.RateLimitingInterface, we watchEv
 				queue.Add(ev)
 			}
 		},
+	}
+}
+
+func exFiltering(event *v1.Event, exFilter extraFilter) bool {
+	t := exFilter.Type
+	for _, f := range exFilter.Filters {
+		v := reflect.ValueOf(event).Elem()
+		for _, k := range strings.Split(f.Key, ".") {
+			v = v.FieldByName(k)
+			if !v.IsValid() {
+				break
+			}
+			if v.Kind() == reflect.Struct {
+				continue
+			}
+			if v.Kind() != reflect.String {
+				break
+			}
+			if strings.Contains(v.String(), f.Value) {
+				if t == "include" {
+					return false
+				} else {
+					return true
+				}
+			}
+		}
+	}
+	if t == "include" {
+		return true
+	} else {
+		return false
 	}
 }

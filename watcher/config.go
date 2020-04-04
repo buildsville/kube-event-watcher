@@ -18,6 +18,7 @@ type Config struct {
 	Namespace      string          `yaml:"namespace"`
 	WatchEvent     watchEvent      `yaml:"watchEvent"`
 	FieldSelectors []fieldSelector `yaml:"fieldSelectors"`
+	ExtraFilter    extraFilter     `yaml:"extraFilter"`
 	Channel        string          `yaml:"channel"`
 	LogStream      string          `yaml:"logStream"`
 }
@@ -32,6 +33,16 @@ type fieldSelector struct {
 	Key   string `yaml:"key"`
 	Value string `yaml:"value"`
 	Type  string `yaml:"type"`
+}
+
+type extraFilter struct {
+	Type    string   `yaml:"type"`
+	Filters []filter `yaml:filters`
+}
+
+type filter struct {
+	Key   string `yaml:"key"`
+	Value string `yaml:"value"`
 }
 
 //configの指定がない場合のdefaultを設けておく

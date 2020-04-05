@@ -8,7 +8,7 @@ import (
 	"text/template"
 
 	"github.com/golang/glog"
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -66,17 +66,15 @@ func ValidateSlack() error {
 	title := "kube-event-watcher"
 	text := "application start"
 	params := prepareParams(title, text, "good")
-	if _, _, e := api.PostMessage(slackConfBase.Channel, "", params); e != nil {
+	if _, _, e := api.PostMessage(slackConfBase.Channel, params...); e != nil {
 		return e
 	}
 	return nil
 }
 
-func prepareParams(title string, text string, color string) slack.PostMessageParameters {
-	params := slack.PostMessageParameters{
-		AsUser: true,
-	}
-	attachment := slack.Attachment{
+func prepareParams(title string, text string, color string) []slack.MsgOption {
+	asUser := slack.MsgOptionAsUser(true)
+	attachment := slack.MsgOptionAttachments(slack.Attachment{
 		Color: color,
 		Fields: []slack.AttachmentField{
 			slack.AttachmentField{
@@ -84,9 +82,11 @@ func prepareParams(title string, text string, color string) slack.PostMessagePar
 				Value: text,
 			},
 		},
+	})
+	return []slack.MsgOption{
+		asUser,
+		attachment,
 	}
-	params.Attachments = []slack.Attachment{attachment}
-	return params
 }
 
 func prepareSlackMessage(event v1.Event, tpl *template.Template) string {
@@ -119,11 +119,11 @@ func postEventToSlack(obj interface{}, action string, status string, conf slackC
 		return nil
 	}
 	params := prepareParams(title, message, color)
-	_, _, err := api.PostMessage(conf.Channel, "", params)
+	_, _, err := api.PostMessage(conf.Channel, params...)
 	if err != nil {
 		if err.Error() == "channel_not_found" {
 			glog.Infof("error : channel %v not found, send message to default channel", conf.Channel)
-			_, _, err = api.PostMessage(conf.Channel, "", params)
+			_, _, err = api.PostMessage(conf.Channel, params...)
 		}
 		if err != nil {
 			return err

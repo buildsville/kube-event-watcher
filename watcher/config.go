@@ -41,8 +41,9 @@ type extraFilter struct {
 }
 
 type filter struct {
-	Key   string `yaml:"key"`
-	Value string `yaml:"value"`
+	Key       string `yaml:"key"`
+	Value     string `yaml:"value"`
+	Condition string `yaml:"condition"`
 }
 
 //configの指定がない場合のdefaultを設けておく

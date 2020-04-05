@@ -307,6 +307,13 @@ func exFiltering(event *v1.Event, exFilter extraFilter) bool {
 	if len(exFilter.Filters) == 0 {
 		return false
 	}
+	andCondCnt := 0
+	andMatchCnt := 0
+	for _, f := range exFilter.Filters {
+		if f.Condition == "and" {
+			andCondCnt++
+		}
+	}
 	const (
 		toKeep = "keep"
 		toDrop = "drop"
@@ -327,9 +334,23 @@ func exFiltering(event *v1.Event, exFilter extraFilter) bool {
 			if strings.Contains(v.String(), f.Value) {
 				switch exFilter.Type {
 				case toKeep:
-					return false
+					if f.Condition != "and" {
+						return false
+					}
+					andMatchCnt++
+					if andMatchCnt == andCondCnt {
+						return false
+					}
+					continue
 				case toDrop:
-					return true
+					if f.Condition != "and" {
+						return true
+					}
+					andMatchCnt++
+					if andMatchCnt == andCondCnt {
+						return true
+					}
+					continue
 				default:
 					break
 				}

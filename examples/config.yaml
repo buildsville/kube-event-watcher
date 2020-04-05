@@ -1,4 +1,4 @@
-- namespace: "app"
+- namespace: "default"
   watchEvent:
     ADDED: true
     MODIFIED: true
@@ -13,10 +13,12 @@
       value: Created
       type: exclude
   extraFilter:
-    type: keep
+    type: drop
     filters:
-      - key: Type
-        value: Warning
+      - key: InvolvedObject.Name
+        value: batch
+      - key: Message
+        value: success
 - namespace: "kube-system"
   watchEvent:
     ADDED: true

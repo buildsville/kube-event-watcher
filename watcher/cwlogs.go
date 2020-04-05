@@ -196,7 +196,7 @@ func prepareCWMessage(event v1.Event, action string, tpl *template.Template) (st
 	}
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, pa); err != nil {
-		glog.Errorf("template parse error : ", err)
+		glog.Errorf("template parse error : %s\n", err)
 		return "", time.Now().Unix()
 	}
 	return buf.String(), event.LastTimestamp.Unix()

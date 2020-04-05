@@ -72,6 +72,16 @@ func ValidateSlack() error {
 	return nil
 }
 
+func postExitMsg() {
+	api := slack.New(slackConfBase.Token)
+	title := "kube-event-watcher"
+	text := "application stop"
+	params := prepareParams(title, text, "good")
+	if _, _, e := api.PostMessage(slackConfBase.Channel, params...); e != nil {
+		glog.Errorf("error send shutdown message : %s\n", e)
+	}
+}
+
 func prepareParams(title string, text string, color string) []slack.MsgOption {
 	asUser := slack.MsgOptionAsUser(true)
 	attachment := slack.MsgOptionAttachments(slack.Attachment{
@@ -92,7 +102,7 @@ func prepareParams(title string, text string, color string) []slack.MsgOption {
 func prepareSlackMessage(event v1.Event, tpl *template.Template) string {
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, event); err != nil {
-		glog.Errorf("template parse error : ", err)
+		glog.Errorf("template parse error : %s\n", err)
 		return ""
 	}
 	return buf.String()

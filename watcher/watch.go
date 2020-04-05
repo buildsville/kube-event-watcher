@@ -123,6 +123,11 @@ func (c *controller) processItem(ev event) error {
 				return nil
 			}
 
+			//不定期に起こる謎のupdate(`resourceVersion for the provided watch is too old`)を排除するためlastTimestampから60秒以上はskip
+			if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() > 60 {
+				return nil
+			}
+
 			if exFiltering(assertedObj, c.extraFilter) {
 				if glog.V(1) {
 					glog.Infof("Filtered by extra filters, %s", ev.key)
@@ -130,7 +135,8 @@ func (c *controller) processItem(ev event) error {
 				return nil
 			}
 
-			if ev.eventType == "ADDED" { //case "ADDED"
+			switch ev.eventType {
+			case "ADDED":
 				setPromMetrics(assertedObj)
 				if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.slackConf); e != nil {
 					return e
@@ -140,28 +146,27 @@ func (c *controller) processItem(ev event) error {
 					glog.Errorf("Error send cloudwatch logs : %s \n", e)
 				}
 				return nil
-			} else { //case "MODIFIED"
-				//不定期に起こる謎のupdate(`resourceVersion for the provided watch is too old`)を排除するためlastTimestampから1分未満の時だけpost
-				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
-					setPromMetrics(assertedObj)
-					if e := postEventToSlack(assertedObj, "updated", assertedObj.Type, c.slackConf); e != nil {
-						return e
-					}
-					if e := postEventToCWLogs(assertedObj, "updated", c.logConf); e != nil {
-						glog.Errorf("Error send cloudwatch logs : %s \n", e)
-					}
-					return nil
+			case "MODIFIED":
+				setPromMetrics(assertedObj)
+				if e := postEventToSlack(assertedObj, "updated", assertedObj.Type, c.slackConf); e != nil {
+					return e
 				}
+				if e := postEventToCWLogs(assertedObj, "updated", c.logConf); e != nil {
+					glog.Errorf("Error send cloudwatch logs : %s \n", e)
+				}
+				return nil
+			default:
+				return nil
 			}
-		} else { //case "DELETED"
-			if e := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.slackConf); e != nil {
-				return e
-			}
-			if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logConf); e != nil {
-				glog.Errorf("Error send cloudwatch logs : %s \n", e)
-			}
-			return nil
 		}
+		//case "DELETED"
+		if e := postEventToSlack(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", "Danger", c.slackConf); e != nil {
+			return e
+		}
+		if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logConf); e != nil {
+			glog.Errorf("Error send cloudwatch logs : %s \n", e)
+		}
+		return nil
 	}
 	return nil
 }
@@ -255,6 +260,7 @@ func WatchStart(appConfig []Config) {
 		go controller.run(stop)
 	}
 
+	defer postExitMsg()
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGTERM)
 	signal.Notify(sigterm, syscall.SIGINT)
@@ -324,6 +330,8 @@ func exFiltering(event *v1.Event, exFilter extraFilter) bool {
 					return false
 				case toDrop:
 					return true
+				default:
+					break
 				}
 			}
 		}

@@ -37,7 +37,7 @@ type fieldSelector struct {
 
 type extraFilter struct {
 	Type    string   `yaml:"type"`
-	Filters []filter `yaml:filters`
+	Filters []filter `yaml:"filters"`
 }
 
 type filter struct {

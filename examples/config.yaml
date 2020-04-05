@@ -13,7 +13,7 @@
       value: Created
       type: exclude
   extraFilter:
-    type: exclude
+    type: drop
     filters:
       - key: InvolvedObject.Name
         value: batch

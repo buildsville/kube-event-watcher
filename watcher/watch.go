@@ -135,7 +135,7 @@ func (c *controller) processItem(ev event) error {
 				}
 				if e := postEventToCWLogs(assertedObj, "created", c.logConf); e != nil {
 					//cwlogsのエラーはreturnしない（retryしない）
-					glog.Errorf("Error send cloudwatch logs : \n", e)
+					glog.Errorf("Error send cloudwatch logs : %s \n", e)
 				}
 				return nil
 			} else { //case "MODIFIED"
@@ -146,7 +146,7 @@ func (c *controller) processItem(ev event) error {
 						return e
 					}
 					if e := postEventToCWLogs(assertedObj, "updated", c.logConf); e != nil {
-						glog.Errorf("Error send cloudwatch logs : \n", e)
+						glog.Errorf("Error send cloudwatch logs : %s \n", e)
 					}
 					return nil
 				}
@@ -156,7 +156,7 @@ func (c *controller) processItem(ev event) error {
 				return e
 			}
 			if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logConf); e != nil {
-				glog.Errorf("Error send cloudwatch logs : \n", e)
+				glog.Errorf("Error send cloudwatch logs : %s \n", e)
 			}
 			return nil
 		}
@@ -207,15 +207,22 @@ func (c *controller) runWorker() {
 }
 
 func makeFieldSelector(conf []fieldSelector) fields.Selector {
+	const (
+		toInclude = "include"
+		toExclude = "exclude"
+	)
 	if len(conf) == 0 {
 		return fields.Everything()
 	}
 	var selectors []fields.Selector
 	for _, s := range conf {
-		if s.Type == "exclude" {
+		switch s.Type {
+		case toExclude:
 			selectors = append(selectors, fields.OneTermNotEqualSelector(s.Key, s.Value))
-		} else {
+		case toInclude:
 			selectors = append(selectors, fields.OneTermEqualSelector(s.Key, s.Value))
+		default:
+			continue
 		}
 	}
 	return fields.AndSelectors(selectors...)
@@ -287,8 +294,15 @@ func resourceEventHandlerFuncs(queue workqueue.RateLimitingInterface, we watchEv
 	}
 }
 
+// return trueで通知がスキップされる
 func exFiltering(event *v1.Event, exFilter extraFilter) bool {
-	t := exFilter.Type
+	if len(exFilter.Filters) == 0 {
+		return false
+	}
+	const (
+		toKeep = "keep"
+		toDrop = "drop"
+	)
 	for _, f := range exFilter.Filters {
 		v := reflect.ValueOf(event).Elem()
 		for _, k := range strings.Split(f.Key, ".") {
@@ -303,17 +317,22 @@ func exFiltering(event *v1.Event, exFilter extraFilter) bool {
 				break
 			}
 			if strings.Contains(v.String(), f.Value) {
-				if t == "include" {
+				switch exFilter.Type {
+				case toKeep:
 					return false
-				} else {
+				case toDrop:
 					return true
 				}
 			}
 		}
 	}
-	if t == "include" {
+	// マッチしなかった時の分岐
+	switch exFilter.Type {
+	case toKeep:
 		return true
-	} else {
+	case toDrop:
+		return false
+	default:
 		return false
 	}
 }

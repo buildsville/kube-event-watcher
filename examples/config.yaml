@@ -12,6 +12,13 @@
     - key: reason
       value: Created
       type: exclude
+  extraFilter:
+    type: drop
+    filters:
+      - key: InvolvedObject.Name
+        value: batch
+      - key: Message
+        value: success
 - namespace: "kube-system"
   watchEvent:
     ADDED: true

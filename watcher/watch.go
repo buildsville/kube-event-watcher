@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,14 +30,14 @@ const (
 	defaultKubeconfigPath = "~/.kube/config"
 )
 
-var serverStartTime time.Time
-
 type controller struct {
-	indexer   cache.Indexer
-	queue     workqueue.RateLimitingInterface
-	informer  cache.Controller
-	slackConf slackConfig
-	logConf   cwLogConfig
+	indexer     cache.Indexer
+	queue       workqueue.RateLimitingInterface
+	informer    cache.Controller
+	slackConf   slackConfig
+	logConf     cwLogConfig
+	extraFilter extraFilter
+	startTime   time.Time
 }
 
 type event struct {
@@ -76,13 +78,15 @@ func kubeClient() kubernetes.Interface {
 	return ret
 }
 
-func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, slackConfig slackConfig, logConfig cwLogConfig) *controller {
+func newController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, slackConfig slackConfig, logConfig cwLogConfig, extraFilter extraFilter, startTime time.Time) *controller {
 	return &controller{
-		informer:  informer,
-		indexer:   indexer,
-		queue:     queue,
-		slackConf: slackConfig,
-		logConf:   logConfig,
+		informer:    informer,
+		indexer:     indexer,
+		queue:       queue,
+		slackConf:   slackConfig,
+		logConf:     logConfig,
+		extraFilter: extraFilter,
+		startTime:   startTime,
 	}
 }
 
@@ -114,19 +118,26 @@ func (c *controller) processItem(ev event) error {
 				return nil
 			}
 
+			//起動時に取得する既存のlistはskip
+			if assertedObj.ObjectMeta.CreationTimestamp.Sub(c.startTime).Seconds() < 0 {
+				return nil
+			}
+
+			if exFiltering(assertedObj, c.extraFilter) {
+				glog.Infof("Filtered by extra filters, %s", ev.key)
+				return nil
+			}
+
 			if ev.eventType == "ADDED" { //case "ADDED"
-				//起動時に取得する既存のlistは出力させない
-				if assertedObj.ObjectMeta.CreationTimestamp.Sub(serverStartTime).Seconds() >= 0 {
-					setPromMetrics(assertedObj)
-					if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.slackConf); e != nil {
-						return e
-					}
-					if e := postEventToCWLogs(assertedObj, "created", c.logConf); e != nil {
-						//cwlogsのエラーはreturnしない（retryしない）
-						glog.Errorf("Error send cloudwatch logs : \n", e)
-					}
-					return nil
+				setPromMetrics(assertedObj)
+				if e := postEventToSlack(assertedObj, "created", assertedObj.Type, c.slackConf); e != nil {
+					return e
 				}
+				if e := postEventToCWLogs(assertedObj, "created", c.logConf); e != nil {
+					//cwlogsのエラーはreturnしない（retryしない）
+					glog.Errorf("Error send cloudwatch logs : %s \n", e)
+				}
+				return nil
 			} else { //case "MODIFIED"
 				//不定期に起こる謎のupdate(`resourceVersion for the provided watch is too old`)を排除するためlastTimestampから1分未満の時だけpost
 				if time.Now().Local().Unix()-assertedObj.LastTimestamp.Unix() < 60 {
@@ -135,7 +146,7 @@ func (c *controller) processItem(ev event) error {
 						return e
 					}
 					if e := postEventToCWLogs(assertedObj, "updated", c.logConf); e != nil {
-						glog.Errorf("Error send cloudwatch logs : \n", e)
+						glog.Errorf("Error send cloudwatch logs : %s \n", e)
 					}
 					return nil
 				}
@@ -145,7 +156,7 @@ func (c *controller) processItem(ev event) error {
 				return e
 			}
 			if e := postEventToCWLogs(fmt.Sprintf("Event %s has been deleted.", ev.key), "deleted", c.logConf); e != nil {
-				glog.Errorf("Error send cloudwatch logs : \n", e)
+				glog.Errorf("Error send cloudwatch logs : %s \n", e)
 			}
 			return nil
 		}
@@ -175,7 +186,6 @@ func (c *controller) run(stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.queue.ShutDown()
 	glog.Infoln("Starting Event controller")
-	serverStartTime = time.Now().Local()
 
 	go c.informer.Run(stopCh)
 
@@ -197,15 +207,22 @@ func (c *controller) runWorker() {
 }
 
 func makeFieldSelector(conf []fieldSelector) fields.Selector {
+	const (
+		toInclude = "include"
+		toExclude = "exclude"
+	)
 	if len(conf) == 0 {
 		return fields.Everything()
 	}
 	var selectors []fields.Selector
 	for _, s := range conf {
-		if s.Type == "exclude" {
+		switch s.Type {
+		case toExclude:
 			selectors = append(selectors, fields.OneTermNotEqualSelector(s.Key, s.Value))
-		} else {
+		case toInclude:
 			selectors = append(selectors, fields.OneTermEqualSelector(s.Key, s.Value))
+		default:
+			continue
 		}
 	}
 	return fields.AndSelectors(selectors...)
@@ -214,20 +231,23 @@ func makeFieldSelector(conf []fieldSelector) fields.Selector {
 // WatchStart : eventをwatchするためのmain function
 func WatchStart(appConfig []Config) {
 	client := kubeClient()
-	for _, c := range appConfig {
-		fieldSelector := makeFieldSelector(c.FieldSelectors)
-		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", c.Namespace, fieldSelector)
+	for _, cf := range appConfig {
+		fieldSelector := makeFieldSelector(cf.FieldSelectors)
+		eventListWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "events", cf.Namespace, fieldSelector)
 		queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-		indexer, informer := cache.NewIndexerInformer(eventListWatcher, &v1.Event{}, 0, resourceEventHandlerFuncs(queue, c.WatchEvent), cache.Indexers{})
+		indexer, informer := cache.NewIndexerInformer(eventListWatcher, &v1.Event{}, 0, resourceEventHandlerFuncs(queue, cf.WatchEvent), cache.Indexers{})
 		sc := loadSlackConfig()
-		if c.Channel != "" {
-			sc.Channel = c.Channel
+		if cf.Channel != "" {
+			sc.Channel = cf.Channel
 		}
 		lc := loadCWLogConfig()
-		if c.LogStream != "" {
-			lc.CWLogStream = c.LogStream
+		if cf.LogStream != "" {
+			lc.CWLogStream = cf.LogStream
 		}
-		controller := newController(queue, indexer, informer, sc, lc)
+		st := time.Now().Local()
+		ef := cf.ExtraFilter
+
+		controller := newController(queue, indexer, informer, sc, lc, ef, st)
 		stop := make(chan struct{})
 		defer close(stop)
 		go controller.run(stop)
@@ -271,5 +291,48 @@ func resourceEventHandlerFuncs(queue workqueue.RateLimitingInterface, we watchEv
 				queue.Add(ev)
 			}
 		},
+	}
+}
+
+// return trueで通知がスキップされる
+func exFiltering(event *v1.Event, exFilter extraFilter) bool {
+	if len(exFilter.Filters) == 0 {
+		return false
+	}
+	const (
+		toKeep = "keep"
+		toDrop = "drop"
+	)
+	for _, f := range exFilter.Filters {
+		v := reflect.ValueOf(event).Elem()
+		for _, k := range strings.Split(f.Key, ".") {
+			v = v.FieldByName(k)
+			if !v.IsValid() {
+				break
+			}
+			if v.Kind() == reflect.Struct {
+				continue
+			}
+			if v.Kind() != reflect.String {
+				break
+			}
+			if strings.Contains(v.String(), f.Value) {
+				switch exFilter.Type {
+				case toKeep:
+					return false
+				case toDrop:
+					return true
+				}
+			}
+		}
+	}
+	// マッチしなかった時の分岐
+	switch exFilter.Type {
+	case toKeep:
+		return true
+	case toDrop:
+		return false
+	default:
+		return false
 	}
 }

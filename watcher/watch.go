@@ -124,7 +124,9 @@ func (c *controller) processItem(ev event) error {
 			}
 
 			if exFiltering(assertedObj, c.extraFilter) {
-				glog.Infof("Filtered by extra filters, %s", ev.key)
+				if glog.V(1) {
+					glog.Infof("Filtered by extra filters, %s", ev.key)
+				}
 				return nil
 			}
 

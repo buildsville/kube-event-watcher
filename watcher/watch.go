@@ -134,6 +134,9 @@ func (c *controller) processItem(ev event) error {
 				}
 				return nil
 			}
+			if glog.V(1) {
+				glog.Infof("Send notify, %s", ev.key)
+			}
 
 			switch ev.eventType {
 			case "ADDED":
@@ -331,7 +334,7 @@ func exFiltering(event *v1.Event, exFilter extraFilter) bool {
 			if v.Kind() != reflect.String {
 				break
 			}
-			if strings.Contains(v.String(), f.Value) {
+			if matchString(f.Value, v.String()) {
 				switch exFilter.Type {
 				case toKeep:
 					if f.Condition != "and" {
@@ -366,4 +369,24 @@ func exFiltering(event *v1.Event, exFilter extraFilter) bool {
 	default:
 		return false
 	}
+}
+
+func matchString(pattern string, target string) bool {
+	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") {
+		ptn := strings.TrimSuffix(strings.TrimPrefix(pattern, "/"), "/")
+		glog.Infoln("use regexp match")
+		match, err := regexp.MatchString(ptn, target)
+		if match {
+			return true
+		}
+		if err != nil {
+			glog.Errorf("Error regexp.MatchString : %s\n", err)
+		}
+	} else {
+		glog.Infoln("use string match")
+		if strings.Contains(target, pattern) {
+			return true
+		}
+	}
+	return false
 }

@@ -17,10 +17,10 @@
     filters:
       - key: InvolvedObject.Name
         value: batch
-        condition: or
+        condition: and
       - key: Message
-        value: success
-        condition: or
+        value: /(success|finish)/
+        condition: and
 - namespace: "kube-system"
   watchEvent:
     ADDED: true

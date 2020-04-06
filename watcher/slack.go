@@ -73,12 +73,14 @@ func ValidateSlack() error {
 }
 
 func postExitMsg() {
-	api := slack.New(slackConfBase.Token)
-	title := "kube-event-watcher"
-	text := "application stop"
-	params := prepareParams(title, text, "good")
-	if _, _, e := api.PostMessage(slackConfBase.Channel, params...); e != nil {
-		glog.Errorf("error send shutdown message : %s\n", e)
+	if *notifySlack {
+		api := slack.New(slackConfBase.Token)
+		title := "kube-event-watcher"
+		text := "application stop"
+		params := prepareParams(title, text, "good")
+		if _, _, e := api.PostMessage(slackConfBase.Channel, params...); e != nil {
+			glog.Errorf("error send shutdown message : %s\n", e)
+		}
 	}
 }
 

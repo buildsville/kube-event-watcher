@@ -138,6 +138,10 @@ func (c *controller) processItem(ev event) error {
 				glog.Infof("Send notify, %s", ev.key)
 			}
 
+			if e := putEventToStdout(assertedObj); e != nil {
+				glog.Errorf("Error put event to stdout : %s \n", e)
+			}
+
 			switch ev.eventType {
 			case "ADDED":
 				setPromMetrics(assertedObj)
